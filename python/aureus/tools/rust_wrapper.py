@@ -1,5 +1,6 @@
 """Wrapper for interacting with Rust engine via subprocess."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -360,7 +361,6 @@ class RustEngineWrapper:
                     with open(stats_path) as f:
                         stats_content = f.read()
                     
-                    import hashlib
                     hash_val = hashlib.sha256(stats_content.encode()).hexdigest()
                     hashes.append(hash_val)
             

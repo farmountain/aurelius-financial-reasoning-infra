@@ -1,9 +1,11 @@
 """Main orchestrator that coordinates all components."""
 
+import hashlib
+import json
+import re
+import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any
-import json
-import tempfile
 
 from aureus.tools.rust_wrapper import RustEngineWrapper
 from aureus.tools.schemas import (
@@ -205,8 +207,10 @@ class Orchestrator:
                 json.dump(artifact_data, f, indent=2)
             
             # Note: HipCortex commit would be executed here if the binary exists
-            # For now, we'll create a placeholder
-            artifact_id = "placeholder_artifact_id_" + str(hash(goal))[:16]
+            # For now, we'll create a deterministic artifact ID based on goal and stats
+            artifact_data_str = json.dumps(artifact_data, sort_keys=True)
+            artifact_hash = hashlib.sha256(artifact_data_str.encode()).hexdigest()
+            artifact_id = artifact_hash
             
             print(f"✓ Committed artifact: {artifact_id}")
             
@@ -237,7 +241,6 @@ class Orchestrator:
         constraints = {}
         
         # Extract drawdown constraint
-        import re
         dd_match = re.search(r"DD\s*<\s*(\d+)%", goal, re.IGNORECASE)
         if dd_match:
             constraints["max_drawdown"] = float(dd_match.group(1)) / 100.0
