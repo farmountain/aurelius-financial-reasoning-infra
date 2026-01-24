@@ -159,7 +159,10 @@ fn test_hash_stability_in_loop() {
     // Hash the same data many times and verify stability
     for _ in 0..NUM_ITERATIONS {
         let hash = stable_hash_bytes(data);
-        assert_eq!(hash, expected_hash, "Hash should remain stable across iterations");
+        assert_eq!(
+            hash, expected_hash,
+            "Hash should remain stable across iterations"
+        );
     }
 }
 
@@ -168,12 +171,17 @@ fn test_hash_stability_in_loop() {
 fn test_rng_stability_across_resets() {
     // Generate reference sequence
     let mut rng_ref = ChaCha8Rng::seed_from_u64(TEST_SEED_4);
-    let expected: Vec<f64> = (0..NUM_SAMPLES_SMALL).map(|_| rng_ref.gen::<f64>()).collect();
+    let expected: Vec<f64> = (0..NUM_SAMPLES_SMALL)
+        .map(|_| rng_ref.gen::<f64>())
+        .collect();
 
     // Test multiple times that we get the same sequence after resetting
     for _ in 0..NUM_RESET_TESTS {
         let mut rng = ChaCha8Rng::seed_from_u64(TEST_SEED_4);
         let sequence: Vec<f64> = (0..NUM_SAMPLES_SMALL).map(|_| rng.gen::<f64>()).collect();
-        assert_eq!(sequence, expected, "RNG sequence should be stable after reset");
+        assert_eq!(
+            sequence, expected,
+            "RNG sequence should be stable after reset"
+        );
     }
 }
