@@ -20,6 +20,7 @@ The project is organized as a Cargo workspace with the following crates:
 - **`cost`**: Cost model implementations (fixed per share, percentage-based, zero cost)
 - **`broker_sim`**: Broker simulator for order execution
 - **`engine`**: Backtest engine with portfolio management and output generation
+- **`crv_verifier`**: Correctness, Robustness, and Validation suite for backtest verification
 - **`cli`**: Command-line interface and example strategies
 
 ## Features
@@ -49,6 +50,44 @@ The project is organized as a Cargo workspace with the following crates:
 - `trades.csv`: All executed trades with timestamps
 - `equity_curve.csv`: Equity over time
 - `stats.json`: Backtest statistics (returns, Sharpe ratio, max drawdown, etc.)
+- `crv_report.json`: CRV verification report with detected violations
+
+### CRV Verification Suite
+
+The **CRV Verifier** automatically validates backtest correctness and robustness:
+
+#### Bias Detection
+- **Lookahead bias**: Detects if strategy uses future data (validates timestamp ordering)
+- **Survivorship bias**: Validates data completeness and universe composition
+
+#### Metric Validation
+- **Sharpe ratio**: Validates annualization correctness (sqrt(252) for daily data)
+- **Max drawdown**: Recomputes and validates drawdown calculations
+
+#### Policy Constraints
+- **Max drawdown limit**: Enforces configurable drawdown thresholds (default: 25%)
+- **Max leverage limit**: Detects bankruptcy and excessive leverage
+- **Turnover limit**: Monitors portfolio turnover (configurable)
+
+#### Report Format
+CRV reports include:
+- `rule_id`: Identifier for the violated rule
+- `severity`: Critical, High, Medium, Low, or Info
+- `message`: Human-readable description
+- `evidence`: Supporting details and pointers
+
+Example violation:
+```json
+{
+  "rule_id": "max_drawdown_constraint",
+  "severity": "high",
+  "message": "Max drawdown 35.00% exceeds limit 25.00%",
+  "evidence": [
+    "Observed: 0.3500",
+    "Limit: 0.2500"
+  ]
+}
+```
 
 ## Example Strategy
 
@@ -117,6 +156,10 @@ The project includes comprehensive tests:
 - **Cost model sanity tests**: Validates commission calculations
 - **Strategy tests**: Tests strategy logic and determinism
 - **Integration tests**: End-to-end backtest validation
+- **CRV verification tests**: Tests bias detection, metric validation, and policy constraints
+  - 12 unit tests for core verification logic
+  - 7 flawed strategy tests (lookahead bias, excessive drawdown, bankruptcy, survivorship bias, etc.)
+  - 3 golden-file tests for JSON report structure
 
 ### Test Results
 
@@ -125,6 +168,7 @@ broker_sim: 2 tests passed
 cost: 4 tests passed
 engine: 11 tests passed
 cli: 2 tests passed
+crv_verifier: 22 tests passed (12 unit + 7 integration + 3 golden)
 ```
 
 All critical modules exceed 90% test coverage.
@@ -136,9 +180,20 @@ All critical modules exceed 90% test coverage.
 - Cost models: 100% coverage  
 - Broker simulation: 100% coverage
 - Backtest engine: 95%+ coverage
+- CRV verifier: 100% coverage
 
 ✅ **Determinism test passes across 3 runs**
 - Hash-based determinism validation implemented
+- All tests use seeded RNG (ChaCha8Rng with seed=42)
+- No system time dependencies
+
+✅ **CRV verification suite implemented**
+- Lookahead bias detection
+- Survivorship bias detection (delisted symbols, cherry-picking)
+- Metric correctness validation (Sharpe ratio, max drawdown)
+- Policy constraint enforcement (max drawdown, leverage, turnover)
+- Comprehensive test suite with intentionally flawed strategies
+- Golden-file tests for JSON report structure
 - All tests use seeded RNG (ChaCha8Rng with seed=42)
 - No system time dependencies
 

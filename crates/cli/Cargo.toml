@@ -14,6 +14,7 @@ schema = { workspace = true }
 cost = { workspace = true }
 broker_sim = { workspace = true }
 engine = { workspace = true }
+crv_verifier = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

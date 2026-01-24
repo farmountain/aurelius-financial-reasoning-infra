@@ -1,0 +1,15 @@
+{
+  "timestamp": 3000,
+  "violations": [
+    {
+      "rule_id": "max_drawdown_constraint",
+      "severity": "high",
+      "message": "Max drawdown 35.00% exceeds limit 25.00%",
+      "evidence": [
+        "Observed: 0.3500",
+        "Limit: 0.2500"
+      ]
+    }
+  ],
+  "passed": false
+}

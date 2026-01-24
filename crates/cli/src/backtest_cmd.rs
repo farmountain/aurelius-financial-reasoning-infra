@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use broker_sim::SimpleBroker;
 use cost::{FixedPerShareCost, PercentageCost, ZeroCost};
+use crv_verifier::{CRVVerifier, PolicyConstraints};
 use engine::{BacktestEngine, VecDataFeed};
 use polars::prelude::*;
 use schema::{Bar, CostModel};
@@ -105,6 +106,40 @@ fn run_backtest_with_strategy<S: schema::Strategy>(
     let stats_path = out_dir.join("stats.json");
     engine::output::write_stats_json(&stats, &stats_path)?;
     println!("Wrote statistics to {:?}", stats_path);
+
+    // Run CRV verification
+    println!("\n=== Running CRV Verification ===");
+    let constraints = PolicyConstraints::default();
+    let verifier = CRVVerifier::new(constraints);
+    
+    let crv_report = verifier.verify(
+        &stats,
+        engine.fills(),
+        engine.equity_history(),
+    )?;
+    
+    let crv_path = out_dir.join("crv_report.json");
+    let crv_file = fs::File::create(&crv_path)?;
+    serde_json::to_writer_pretty(crv_file, &crv_report)?;
+    println!("Wrote CRV report to {:?}", crv_path);
+    
+    if crv_report.passed {
+        println!("✓ CRV verification passed");
+    } else {
+        println!("✗ CRV verification failed with {} violation(s)", crv_report.violation_count());
+        for (i, violation) in crv_report.violations.iter().enumerate() {
+            println!("\n  Violation #{}:", i + 1);
+            println!("    Rule: {:?}", violation.rule_id);
+            println!("    Severity: {:?}", violation.severity);
+            println!("    Message: {}", violation.message);
+            if !violation.evidence.is_empty() {
+                println!("    Evidence:");
+                for evidence in &violation.evidence {
+                    println!("      - {}", evidence);
+                }
+            }
+        }
+    }
 
     // Print summary
     println!("\n=== Backtest Summary ===");
