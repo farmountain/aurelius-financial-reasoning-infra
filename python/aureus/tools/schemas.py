@@ -2,7 +2,7 @@
 
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ToolType(str, Enum):
@@ -84,6 +84,8 @@ class HipcortexSearchInput(BaseModel):
 class ToolCall(BaseModel):
     """Tool call with validated parameters."""
     
+    model_config = ConfigDict(use_enum_values=True)
+    
     tool_type: ToolType
     parameters: Union[
         BacktestToolInput,
@@ -92,9 +94,6 @@ class ToolCall(BaseModel):
         HipcortexSearchInput,
         Dict[str, Any],
     ]
-    
-    class Config:
-        use_enum_values = True
 
 
 class ToolResult(BaseModel):

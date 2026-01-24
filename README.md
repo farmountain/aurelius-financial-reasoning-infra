@@ -24,6 +24,20 @@ The project is organized as a Cargo workspace with the following crates:
 - **`cli`**: Command-line interface and example strategies
 - **`hipcortex`**: Content-addressed artifact storage for reproducibility and provenance tracking
 
+### Python Orchestrator
+
+The **Python orchestrator** (`python/aureus`) provides a high-level workflow controller:
+
+- **Tool API wrappers**: JSON schema-validated wrappers for Rust CLI commands
+- **Goal-Guard FSM**: Enforces valid tool call sequences (e.g., cannot run CRV before dev gate)
+- **Dual-loop evidence gates**:
+  - Dev gate: Tests pass, determinism check, lint
+  - Product gate: CRV pass, walk-forward validation, stress testing
+- **Reflexion loop**: Automatic failure analysis and repair plan generation
+- **Strict mode**: Artifact ID-only responses for reproducibility
+
+See [python/README.md](python/README.md) for detailed documentation.
+
 ## Features
 
 ### Core Traits
@@ -126,6 +140,26 @@ The included **Time-Series Momentum** strategy demonstrates:
 - Deterministic execution
 
 ## Usage
+
+### Python Orchestrator (Recommended)
+
+The Python orchestrator provides a high-level interface with evidence gates:
+
+```bash
+# Install Python package
+cd python
+pip install -e .
+
+# Validate installation
+aureus validate
+
+# Run a goal
+aureus run --goal "design a trend strategy under DD<10%" --data ../examples/data.parquet
+```
+
+See [python/README.md](python/README.md) for more details.
+
+### Direct Rust CLI
 
 ### Build
 
