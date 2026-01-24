@@ -217,3 +217,46 @@ fn test_multiple_violations_detected() {
         v.rule_id == RuleId::MaxDrawdownConstraint
     ));
 }
+
+#[test]
+fn test_flawed_strategy_with_survivorship_bias() {
+    // Strategy tested on a universe that excludes delisted stocks
+    let verifier = CRVVerifier::with_defaults();
+    
+    let stats = BacktestStats {
+        initial_equity: 100000.0,
+        final_equity: 150000.0,
+        total_return: 0.5,
+        num_trades: 30,
+        total_commission: 150.0,
+        sharpe_ratio: 2.0,
+        max_drawdown: 0.10,
+    };
+    
+    let fills = vec![];
+    let equity_history = vec![
+        (1000, 100000.0),
+        (2000, 125000.0),
+        (3000, 150000.0),
+    ];
+    
+    // Universe had 50 stocks, 10 delisted (20%), but they were excluded
+    let universe = crv_verifier::UniverseMetadata {
+        total_symbols: 50,
+        delisted_symbols: vec![
+            "FAIL1".to_string(), "FAIL2".to_string(), "FAIL3".to_string(),
+            "FAIL4".to_string(), "FAIL5".to_string(), "FAIL6".to_string(),
+            "FAIL7".to_string(), "FAIL8".to_string(), "FAIL9".to_string(),
+            "FAIL10".to_string(),
+        ],
+        traded_symbols: vec!["AAPL".to_string(), "MSFT".to_string(), "GOOGL".to_string()],
+    };
+    
+    let report = verifier.verify_with_universe(&stats, &fills, &equity_history, &universe).unwrap();
+    
+    assert!(!report.passed);
+    assert!(report.violations.iter().any(|v| 
+        v.rule_id == RuleId::SurvivorshipBias &&
+        v.severity == Severity::High
+    ));
+}

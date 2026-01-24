@@ -25,6 +25,17 @@ pub struct CRVVerifier {
     constraints: PolicyConstraints,
 }
 
+/// Optional metadata for survivorship bias detection
+#[derive(Debug, Clone)]
+pub struct UniverseMetadata {
+    /// Total symbols in universe
+    pub total_symbols: usize,
+    /// Symbols that delisted during backtest period
+    pub delisted_symbols: Vec<String>,
+    /// Symbols actually traded
+    pub traded_symbols: Vec<String>,
+}
+
 impl CRVVerifier {
     pub fn new(constraints: PolicyConstraints) -> Self {
         Self { constraints }
@@ -51,6 +62,74 @@ impl CRVVerifier {
         self.check_policy_constraints(stats, equity_history, &mut report)?;
 
         Ok(report)
+    }
+
+    /// Verify backtest with optional universe metadata for survivorship bias detection
+    pub fn verify_with_universe(
+        &self,
+        stats: &BacktestStats,
+        fills: &[Fill],
+        equity_history: &[(i64, f64)],
+        universe: &UniverseMetadata,
+    ) -> Result<CRVReport> {
+        let mut report = self.verify(stats, fills, equity_history)?;
+
+        // Additional survivorship bias checks
+        self.check_survivorship_bias(universe, &mut report)?;
+
+        Ok(report)
+    }
+
+    /// Check for survivorship bias in universe composition
+    fn check_survivorship_bias(
+        &self,
+        universe: &UniverseMetadata,
+        report: &mut CRVReport,
+    ) -> Result<()> {
+        // Check if delisted symbols are missing from the universe
+        if !universe.delisted_symbols.is_empty() {
+            let delisted_count = universe.delisted_symbols.len();
+            let total_count = universe.total_symbols;
+            let delisted_pct = (delisted_count as f64 / total_count as f64) * 100.0;
+
+            // If more than 5% of symbols are delisted but not in the universe, flag it
+            if delisted_pct > 5.0 {
+                report.add_violation(CRVViolation {
+                    rule_id: RuleId::SurvivorshipBias,
+                    severity: Severity::High,
+                    message: format!(
+                        "Universe may have survivorship bias: {:.1}% of symbols ({}/{}) delisted during backtest period",
+                        delisted_pct, delisted_count, total_count
+                    ),
+                    evidence: vec![
+                        format!("Delisted symbols: {}", universe.delisted_symbols.join(", ")),
+                        "Consider including delisted symbols to avoid survivorship bias".to_string(),
+                    ],
+                });
+            }
+        }
+
+        // Check if traded symbols are a small subset of universe (might indicate cherry-picking)
+        let traded_count = universe.traded_symbols.len();
+        let total_count = universe.total_symbols;
+        
+        if traded_count < total_count / 10 && total_count > 10 {
+            report.add_violation(CRVViolation {
+                rule_id: RuleId::SurvivorshipBias,
+                severity: Severity::Medium,
+                message: format!(
+                    "Strategy traded only {} out of {} symbols ({:.1}%)",
+                    traded_count, total_count,
+                    (traded_count as f64 / total_count as f64) * 100.0
+                ),
+                evidence: vec![
+                    "Trading a small subset of universe may indicate cherry-picking".to_string(),
+                    "Verify strategy logic applies consistently to all universe symbols".to_string(),
+                ],
+            });
+        }
+
+        Ok(())
     }
 
     /// Check metric calculations for correctness
@@ -425,6 +504,63 @@ mod tests {
         assert!(report.violations.iter().any(|v| 
             v.rule_id == RuleId::MaxLeverageConstraint &&
             v.severity == Severity::Critical
+        ));
+    }
+
+    #[test]
+    fn test_verifier_detects_survivorship_bias_delisted() {
+        let verifier = CRVVerifier::with_defaults();
+        let stats = create_test_stats();
+        let fills = vec![];
+        let equity_history = vec![
+            (1000, 100000.0),
+            (2000, 105000.0),
+            (3000, 110000.0),
+        ];
+
+        let universe = UniverseMetadata {
+            total_symbols: 100,
+            delisted_symbols: vec![
+                "XYZ".to_string(),
+                "ABC".to_string(),
+                "DEF".to_string(),
+                "GHI".to_string(),
+                "JKL".to_string(),
+                "MNO".to_string(),
+            ], // 6% delisted
+            traded_symbols: vec!["AAPL".to_string()],
+        };
+
+        let report = verifier.verify_with_universe(&stats, &fills, &equity_history, &universe).unwrap();
+        assert!(!report.passed);
+        assert!(report.violations.iter().any(|v| 
+            v.rule_id == RuleId::SurvivorshipBias &&
+            v.severity == Severity::High
+        ));
+    }
+
+    #[test]
+    fn test_verifier_detects_survivorship_bias_cherry_picking() {
+        let verifier = CRVVerifier::with_defaults();
+        let stats = create_test_stats();
+        let fills = vec![];
+        let equity_history = vec![
+            (1000, 100000.0),
+            (2000, 105000.0),
+            (3000, 110000.0),
+        ];
+
+        let universe = UniverseMetadata {
+            total_symbols: 100,
+            delisted_symbols: vec![],
+            traded_symbols: vec!["AAPL".to_string()], // Only 1 out of 100
+        };
+
+        let report = verifier.verify_with_universe(&stats, &fills, &equity_history, &universe).unwrap();
+        assert!(!report.passed);
+        assert!(report.violations.iter().any(|v| 
+            v.rule_id == RuleId::SurvivorshipBias &&
+            v.severity == Severity::Medium
         ));
     }
 }
