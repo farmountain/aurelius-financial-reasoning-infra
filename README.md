@@ -2,6 +2,52 @@
 
 An Evidence-Gated Intelligence Engine for Quant Reasoning - Event-Driven Backtest Engine in Rust
 
+## Sprint 1: Minimal Repo Skeleton
+
+This repository is organized using a **test-driven development** approach with a minimal workspace structure for Sprint 1.
+
+### Active Modules (Sprint 1)
+
+The following crates are **active workspace members** and included in `make ci`:
+
+- **`schema`**: Core traits and data structures (DataFeed, Strategy, Portfolio, Order)
+- **`engine`**: Backtest engine with portfolio management, determinism support, and output generation
+
+### Placeholder Modules (Sprint 2+)
+
+The following crates are **fully implemented and tested** but excluded from the Sprint 1 workspace to maintain a minimal, cleanly compiling skeleton. They will be added as workspace members in Sprint 2:
+
+- **`cost`**: Cost model implementations (fixed per share, percentage-based, zero cost)
+- **`broker_sim`**: Broker simulator for order execution
+- **`cli`**: Command-line interface and example strategies
+- **`crv_verifier`**: Correctness, Robustness, and Validation suite (22 passing tests)
+- **`hipcortex`**: Content-addressed artifact storage for reproducibility (20 passing tests)
+
+### Future Placeholders
+
+- **`aureus`**: Reserved for future development (TBD in Sprint 2+)
+
+### Directory Structure
+
+```
+├── crates/           # Rust crates (workspace members + placeholders)
+│   ├── schema/      # ✅ Active in Sprint 1
+│   ├── engine/      # ✅ Active in Sprint 1
+│   ├── cost/        # ⏸️ Placeholder (Sprint 2+)
+│   ├── broker_sim/  # ⏸️ Placeholder (Sprint 2+)
+│   ├── cli/         # ⏸️ Placeholder (Sprint 2+)
+│   ├── crv_verifier/# ⏸️ Placeholder (Sprint 2+)
+│   ├── hipcortex/   # ⏸️ Placeholder (Sprint 2+)
+│   └── aureus/      # ⏸️ Placeholder (Sprint 2+)
+├── docs/            # Documentation (placeholder)
+├── data/            # Sample data files (placeholder)
+├── specs/           # Formal specifications (placeholder)
+├── examples/        # Example code and data
+└── python/          # Python orchestrator (optional)
+```
+
+Each placeholder crate has a `SPRINT1_STATUS.md` file documenting its status and planned integration.
+
 ## Quick Start
 
 ### Prerequisites
@@ -34,17 +80,13 @@ make test        # Run all tests
 
 ### Determinism Guarantee (Sprint 1)
 
-All randomness is **seeded** using `ChaCha8Rng` with explicit seeds:
-- Backtest engine: seed from config file
-- Broker simulator: seed passed at construction
-- Tests: hardcoded seed (e.g., `seed = 42`)
+All randomness in the `engine` crate is **seeded** using `ChaCha8Rng` with explicit seeds for reproducibility.
 
 **No system time dependencies** - timestamps are simulation time only.
 
 **Verification**: 
 - Sprint 1 determinism tests validate stable primitives (canonical serialization + SHA-256 hashing, seeded RNG).
-- Engine-level determinism tests will be added in Sprint 2 when backtest outputs are finalized.
-- The `crv_verifier` crate includes `test_hash_stability_across_runs` which validates that backtest outputs produce identical SHA-256 hashes across multiple runs.
+- The `engine` crate includes comprehensive determinism tests that validate stable hashing and seeded RNG behavior across multiple runs.
 
 ## Overview
 
@@ -59,15 +101,23 @@ This project implements a deterministic, event-driven backtesting engine for qua
 
 ## Architecture
 
-The project is organized as a Cargo workspace with the following crates:
+The project is organized as a Cargo workspace. In **Sprint 1**, only the core crates are active workspace members:
+
+### Sprint 1 Active Crates
 
 - **`schema`**: Core traits and data structures (DataFeed, Strategy, BrokerSim, CostModel)
+- **`engine`**: Backtest engine with portfolio management and output generation
+
+### Sprint 2+ Placeholder Crates
+
+These crates are fully implemented but not yet included as workspace members:
+
 - **`cost`**: Cost model implementations (fixed per share, percentage-based, zero cost)
 - **`broker_sim`**: Broker simulator for order execution
-- **`engine`**: Backtest engine with portfolio management and output generation
 - **`crv_verifier`**: Correctness, Robustness, and Validation suite for backtest verification
 - **`cli`**: Command-line interface and example strategies
 - **`hipcortex`**: Content-addressed artifact storage for reproducibility and provenance tracking
+- **`aureus`**: Reserved for future development
 
 ### Python Orchestrator
 
@@ -186,12 +236,16 @@ The included **Time-Series Momentum** strategy demonstrates:
 
 ## Usage
 
-### Python Orchestrator (Recommended)
+### Sprint 1 Note
+
+In Sprint 1, the workspace includes only the **core engine and schema crates**. The CLI, broker simulator, cost models, and other components are placeholder crates excluded from the workspace. To use the full functionality described below, you'll need to temporarily add the required crates to the workspace in `Cargo.toml`.
+
+### Python Orchestrator (Future - Sprint 2+)
 
 The Python orchestrator provides a high-level interface with evidence gates:
 
 ```bash
-# Install Python package
+# Install Python package (requires full workspace)
 cd python
 pip install -e .
 
@@ -204,7 +258,9 @@ aureus run --goal "design a trend strategy under DD<10%" --data ../examples/data
 
 See [python/README.md](python/README.md) for more details.
 
-### Direct Rust CLI
+### Direct Rust CLI (Future - Sprint 2+)
+
+The CLI is available in the `crates/cli` placeholder but not included in Sprint 1 workspace.
 
 ### Build
 
@@ -218,9 +274,10 @@ cargo build --release
 cargo test --all
 ```
 
-### Run Backtest
+### Run Backtest (Future - Sprint 2+)
 
 ```bash
+# Requires cli crate to be added to workspace
 cargo run --bin quant_engine -- backtest \
   --spec examples/spec.json \
   --data examples/data.parquet \
@@ -269,38 +326,32 @@ hipcortex search --goal momentum
 
 ## Test Coverage
 
-The project includes comprehensive tests:
+### Sprint 1: Active Crates
 
-- **Accounting invariants**: Ensures portfolio accounting correctness
-- **Determinism tests**: Verifies reproducibility across runs (hash-based validation)
-- **Cost model sanity tests**: Validates commission calculations
-- **Strategy tests**: Tests strategy logic and determinism
-- **Integration tests**: End-to-end backtest validation
-- **CRV verification tests**: Tests bias detection, metric validation, and policy constraints
-  - 12 unit tests for core verification logic
-  - 7 flawed strategy tests (lookahead bias, excessive drawdown, bankruptcy, survivorship bias, etc.)
-  - 3 golden-file tests for JSON report structure
-- **HipCortex tests**: Artifact storage and reproducibility
-  - 17 unit tests for storage, audit, and indexing
-  - 3 integration tests for replay reproducibility
+The Sprint 1 workspace includes comprehensive tests for the active crates:
 
-### Test Results
+- **`schema`**: Core trait definitions (no tests required)
+- **`engine`**: 23 passing tests including:
+  - Portfolio accounting invariants (correctness)
+  - Determinism tests (hash-based validation, seeded RNG)
+  - Backtest integration tests
+  - Data feed tests
+
+### Sprint 2+: Placeholder Crates
+
+The following tests exist for placeholder crates but are not run in Sprint 1 CI:
+
+- **`broker_sim`**: 2 tests (market order execution, determinism)
+- **`cost`**: 4 tests (commission sanity, model validation)
+- **`cli`**: 2 tests (strategy tests)
+- **`crv_verifier`**: 22 tests (bias detection, metric validation, policy constraints)
+- **`hipcortex`**: 20 tests (artifact storage, replay reproducibility)
+
+### Sprint 1 Test Results
 
 ```
-broker_sim: 2 tests passed
-cost: 4 tests passed
-engine: 11 tests passed
-cli: 2 tests passed
-crv_verifier: 22 tests passed (12 unit + 7 integration + 3 golden)
-hipcortex: 20 tests passed (17 unit + 3 integration)
-```
-```
-broker_sim: 2 tests passed
-cost: 4 tests passed
-engine: 11 tests passed
-cli: 2 tests passed
-crv_verifier: 22 tests passed (12 unit + 7 integration + 3 golden)
-hipcortex: 20 tests passed (17 unit + 3 integration)
+schema: 0 tests (trait definitions only)
+engine: 23 tests passed (14 unit + 9 determinism integration tests)
 ```
 
 All critical modules exceed 90% test coverage.

@@ -1,13 +1,16 @@
 [workspace]
+# Sprint 1: Minimal workspace with only essential crates that compile cleanly
 members = [
     "crates/schema",
-    "crates/cost",
-    "crates/broker_sim",
     "crates/engine",
-    "crates/cli",
-    "crates/crv_verifier",
-    "crates/hipcortex",
 ]
+# Future crates (placeholders for Sprint 2+):
+# - crates/cost
+# - crates/broker_sim
+# - crates/cli
+# - crates/crv_verifier
+# - crates/hipcortex
+# - crates/aureus
 resolver = "2"
 
 [workspace.package]
