@@ -2,6 +2,15 @@ use crate::types::{CRVReport, CRVViolation, RuleId, Severity};
 use anyhow::Result;
 use schema::{BacktestStats, Fill};
 
+/// Threshold for unrealistic Sharpe ratio (annualized)
+const SHARPE_RATIO_UNREALISTIC_THRESHOLD: f64 = 10.0;
+
+/// Threshold percentage for survivorship bias detection (delisted symbols)
+const SURVIVORSHIP_BIAS_DELISTED_THRESHOLD_PCT: f64 = 5.0;
+
+/// Threshold for cherry-picking detection (% of universe traded)
+const SURVIVORSHIP_BIAS_CHERRY_PICKING_THRESHOLD_PCT: f64 = 10.0;
+
 /// Policy constraints for verification
 #[derive(Debug, Clone)]
 pub struct PolicyConstraints {
@@ -92,8 +101,8 @@ impl CRVVerifier {
             let total_count = universe.total_symbols;
             let delisted_pct = (delisted_count as f64 / total_count as f64) * 100.0;
 
-            // If more than 5% of symbols are delisted but not in the universe, flag it
-            if delisted_pct > 5.0 {
+            // If more than threshold % of symbols are delisted but not in the universe, flag it
+            if delisted_pct > SURVIVORSHIP_BIAS_DELISTED_THRESHOLD_PCT {
                 report.add_violation(CRVViolation {
                     rule_id: RuleId::SurvivorshipBias,
                     severity: Severity::High,
@@ -112,15 +121,15 @@ impl CRVVerifier {
         // Check if traded symbols are a small subset of universe (might indicate cherry-picking)
         let traded_count = universe.traded_symbols.len();
         let total_count = universe.total_symbols;
+        let traded_pct = (traded_count as f64 / total_count as f64) * 100.0;
         
-        if traded_count < total_count / 10 && total_count > 10 {
+        if traded_pct < SURVIVORSHIP_BIAS_CHERRY_PICKING_THRESHOLD_PCT && total_count > 10 {
             report.add_violation(CRVViolation {
                 rule_id: RuleId::SurvivorshipBias,
                 severity: Severity::Medium,
                 message: format!(
                     "Strategy traded only {} out of {} symbols ({:.1}%)",
-                    traded_count, total_count,
-                    (traded_count as f64 / total_count as f64) * 100.0
+                    traded_count, total_count, traded_pct
                 ),
                 evidence: vec![
                     "Trading a small subset of universe may indicate cherry-picking".to_string(),
@@ -144,7 +153,7 @@ impl CRVVerifier {
             // Sharpe should be annualized with sqrt(252)
             // We can't validate the exact calculation without the raw returns,
             // but we can check for unrealistic values
-            if stats.sharpe_ratio.abs() > 10.0 {
+            if stats.sharpe_ratio.abs() > SHARPE_RATIO_UNREALISTIC_THRESHOLD {
                 report.add_violation(CRVViolation {
                     rule_id: RuleId::SharpeRatioValidation,
                     severity: Severity::Medium,
@@ -153,7 +162,7 @@ impl CRVVerifier {
                         stats.sharpe_ratio
                     ),
                     evidence: vec![
-                        "Sharpe ratios above 10 are extremely rare in practice".to_string(),
+                        format!("Sharpe ratios above {} are extremely rare in practice", SHARPE_RATIO_UNREALISTIC_THRESHOLD),
                         "Verify annualization is correct (sqrt(252) for daily data)".to_string(),
                     ],
                 });

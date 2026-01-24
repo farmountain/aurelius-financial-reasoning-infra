@@ -189,6 +189,7 @@ All critical modules exceed 90% test coverage.
 
 ✅ **CRV verification suite implemented**
 - Lookahead bias detection
+- Survivorship bias detection (delisted symbols, cherry-picking)
 - Metric correctness validation (Sharpe ratio, max drawdown)
 - Policy constraint enforcement (max drawdown, leverage, turnover)
 - Comprehensive test suite with intentionally flawed strategies
