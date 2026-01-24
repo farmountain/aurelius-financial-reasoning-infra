@@ -22,6 +22,7 @@ The project is organized as a Cargo workspace with the following crates:
 - **`engine`**: Backtest engine with portfolio management and output generation
 - **`crv_verifier`**: Correctness, Robustness, and Validation suite for backtest verification
 - **`cli`**: Command-line interface and example strategies
+- **`hipcortex`**: Content-addressed artifact storage for reproducibility and provenance tracking
 
 ## Features
 
@@ -89,6 +90,33 @@ Example violation:
 }
 ```
 
+### HipCortex: Artifact Storage
+
+HipCortex provides content-addressed storage for research artifacts with reproducibility tracking:
+
+```bash
+# Commit a strategy artifact
+hipcortex commit --artifact strategy.json --message "Add momentum strategy"
+
+# Search for artifacts
+hipcortex search --goal momentum --tag trending
+
+# Show artifact details
+hipcortex show <hash>
+
+# Replay computation for reproducibility verification
+hipcortex replay <result_hash> --data data.parquet
+```
+
+Features:
+- **Content-addressed storage**: SHA-256 hashing over canonical bytes
+- **Artifact types**: Dataset, StrategySpec, BacktestConfig, BacktestResult, CRVReport, Trace
+- **Append-only audit log**: Immutable commit history with lineage tracking
+- **SQLite metadata index**: Fast search by goal, regime tags, policy, timestamps
+- **CLI commands**: commit, show, diff, replay, search
+
+See [crates/hipcortex/README.md](crates/hipcortex/README.md) for detailed documentation.
+
 ## Example Strategy
 
 The included **Time-Series Momentum** strategy demonstrates:
@@ -147,6 +175,19 @@ cargo run --bin quant_engine -- backtest \
 python3 examples/generate_data.py
 ```
 
+### Use HipCortex for Artifact Management
+
+```bash
+# Initialize repository
+hipcortex --repo .hipcortex commit --artifact strategy.json --message "Initial strategy"
+
+# View commit history
+hipcortex show <hash>
+
+# Search artifacts
+hipcortex search --goal momentum
+```
+
 ## Test Coverage
 
 The project includes comprehensive tests:
@@ -160,6 +201,9 @@ The project includes comprehensive tests:
   - 12 unit tests for core verification logic
   - 7 flawed strategy tests (lookahead bias, excessive drawdown, bankruptcy, survivorship bias, etc.)
   - 3 golden-file tests for JSON report structure
+- **HipCortex tests**: Artifact storage and reproducibility
+  - 17 unit tests for storage, audit, and indexing
+  - 3 integration tests for replay reproducibility
 
 ### Test Results
 
@@ -169,6 +213,15 @@ cost: 4 tests passed
 engine: 11 tests passed
 cli: 2 tests passed
 crv_verifier: 22 tests passed (12 unit + 7 integration + 3 golden)
+hipcortex: 20 tests passed (17 unit + 3 integration)
+```
+```
+broker_sim: 2 tests passed
+cost: 4 tests passed
+engine: 11 tests passed
+cli: 2 tests passed
+crv_verifier: 22 tests passed (12 unit + 7 integration + 3 golden)
+hipcortex: 20 tests passed (17 unit + 3 integration)
 ```
 
 All critical modules exceed 90% test coverage.

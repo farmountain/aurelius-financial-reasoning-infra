@@ -4,7 +4,9 @@ members = [
     "crates/cost",
     "crates/broker_sim",
     "crates/engine",
-    "crates/cli", "crates/crv_verifier",
+    "crates/cli",
+    "crates/crv_verifier",
+    "crates/hipcortex",
 ]
 resolver = "2"
 
@@ -21,13 +23,14 @@ cost = { path = "crates/cost" }
 broker_sim = { path = "crates/broker_sim" }
 engine = { path = "crates/engine" }
 crv_verifier = { path = "crates/crv_verifier" }
+hipcortex = { path = "crates/hipcortex" }
 
 # External dependencies
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 anyhow = "1.0"
 thiserror = "2.0"
-chrono = { version = "0.4", default-features = false, features = ["std"] }
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 csv = "1.3"
 rand = "0.8"
 rand_chacha = "0.3"
