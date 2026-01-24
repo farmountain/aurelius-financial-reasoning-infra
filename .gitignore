@@ -14,8 +14,10 @@ Cargo.lock
 .DS_Store
 Thumbs.db
 
-# Test outputs
+# Test outputs (but keep examples)
 /tmp/
 *.csv
-*.json
 *.parquet
+!examples/*.json
+!examples/*.csv
+!examples/*.parquet
