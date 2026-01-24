@@ -5,6 +5,10 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 
+[[bin]]
+name = "hipcortex"
+path = "src/bin/main.rs"
+
 [dependencies]
 schema = { workspace = true }
 crv_verifier = { workspace = true }
