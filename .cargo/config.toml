@@ -1,0 +1,11 @@
+# Cargo configuration for consistent tooling across the project
+
+[alias]
+# Quick format check (used in CI)
+fmt-check = "fmt --check"
+
+# Run clippy with standard warnings (Sprint 1: no failure on warnings)
+clippy-all = "clippy --all-targets --all-features -- -W clippy::all"
+
+# Run tests with colored output
+test-all = "test --all --color=always"

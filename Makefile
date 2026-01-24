@@ -4,13 +4,14 @@
 fmt:
 	cargo fmt
 
-# Check formatting without modifying files
+# Check formatting without modifying files (CI gate: fails on format violations)
 fmt-check:
 	cargo fmt --check
 
-# Run clippy with recommended warnings (Sprint 1: no PR failures on warnings)
+# Run clippy with warnings enabled (Sprint 1: shows warnings but does NOT fail)
 clippy:
-	cargo clippy --all-targets --all-features -- -W clippy::all -W clippy::pedantic
+	@echo "Running clippy (Sprint 1: warnings only, no failures)..."
+	cargo clippy --all-targets --all-features -- -W clippy::all || true
 
 # Run all tests
 test:

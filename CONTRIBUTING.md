@@ -26,9 +26,30 @@ Please be respectful and professional in all interactions with the project commu
 
 ### Code Quality
 
-- Run `cargo fmt` to format your code
-- Run `cargo clippy` to check for common mistakes and improve code quality
-- Fix all clippy warnings before submitting a PR
+#### Formatting (Enforced)
+- **Required**: Run `cargo fmt` to format your code before committing
+- **CI Gate**: `cargo fmt --check` will fail the build if code is not properly formatted
+- **How to fix**: Run `make fmt` or `cargo fmt --all`
+
+#### Linting (Progressive Ratchet)
+- **Current (Sprint 1)**: Run `cargo clippy` to check for common mistakes - warnings are shown but do NOT fail CI
+- **How to run**: `make clippy` or `cargo clippy --all-targets --all-features`
+- **How to fix warnings**: `cargo clippy --fix --all-targets --all-features`
+
+**Clippy Ratchet Plan:**
+This project uses a progressive ratchet approach to improve code quality over time without blocking current development:
+
+- **Sprint 1 (Current)**: Clippy runs in CI but warnings do NOT fail builds. Developers are encouraged to fix warnings when touching related code.
+- **Sprint 2**: Deny `clippy::correctness` warnings (bugs and logic errors must be fixed)
+- **Sprint 3**: Deny `clippy::perf` warnings (performance issues must be addressed)
+- **Sprint 4+**: Consider denying all clippy warnings globally
+
+**Guidelines for handling lints:**
+- **DO NOT** add `#![deny(warnings)]` to any crate - use the ratchet plan instead
+- If scaffolding or generated code triggers pedantic lints:
+  - **Prefer**: Refactor code to satisfy the lint
+  - **Alternative**: Add narrowly scoped `#[allow(...)]` attributes at module level with explanatory comments
+  - **Avoid**: Global `#[allow(...)]` of large lint groups
 
 **If a new lint rule is added, it must be accompanied by either a code fix in the same PR or a ratchet milestone; do not add rules that fail on existing code.**
 
@@ -74,11 +95,12 @@ Add new verification rules to `crates/crv_verifier/src/lib.rs` and ensure compre
 ## Pull Request Process
 
 1. Ensure all tests pass: `cargo test --all`
-2. Ensure code is formatted: `cargo fmt --all -- --check`
-3. Ensure no clippy warnings: `cargo clippy --all -- -D warnings`
-4. Update documentation as needed
-5. Describe your changes in the PR description
-6. Link any related issues
+2. Ensure code is formatted: `make fmt` or `cargo fmt --all`
+3. Run clippy and address relevant warnings: `make clippy`
+4. Run the full CI pipeline locally: `make ci`
+5. Update documentation as needed
+6. Describe your changes in the PR description
+7. Link any related issues
 
 ## Questions?
 
