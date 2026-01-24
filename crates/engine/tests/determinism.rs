@@ -13,9 +13,21 @@
 //! - Independent of unfinished backtest outputs
 
 use engine::{canonical_json_hash, stable_hash_bytes};
+use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
 use serde::Serialize;
+
+// Test constants
+const TEST_SEED_1: u64 = 42;
+const TEST_SEED_2: u64 = 43;
+const TEST_SEED_3: u64 = 123;
+const TEST_SEED_4: u64 = 999;
+const NUM_SAMPLES: usize = 100;
+const NUM_SAMPLES_SMALL: usize = 50;
+const NUM_RANDOM_BYTES: usize = 32;
+const NUM_ITERATIONS: usize = 1000;
+const NUM_RESET_TESTS: usize = 10;
 
 /// Test that stable_hash_bytes produces deterministic hashes
 #[test]
@@ -93,17 +105,12 @@ fn test_canonical_json_hash_sensitivity() {
 /// Test seeded PRNG produces reproducible sequences
 #[test]
 fn test_seeded_rng_determinism() {
-    use rand::Rng;
-
-    const SEED: u64 = 42;
-    const NUM_SAMPLES: usize = 100;
-
     // Generate first sequence
-    let mut rng1 = ChaCha8Rng::seed_from_u64(SEED);
+    let mut rng1 = ChaCha8Rng::seed_from_u64(TEST_SEED_1);
     let sequence1: Vec<f64> = (0..NUM_SAMPLES).map(|_| rng1.gen::<f64>()).collect();
 
     // Generate second sequence with same seed
-    let mut rng2 = ChaCha8Rng::seed_from_u64(SEED);
+    let mut rng2 = ChaCha8Rng::seed_from_u64(TEST_SEED_1);
     let sequence2: Vec<f64> = (0..NUM_SAMPLES).map(|_| rng2.gen::<f64>()).collect();
 
     // Sequences must be identical
@@ -113,16 +120,12 @@ fn test_seeded_rng_determinism() {
 /// Test seeded PRNG produces different sequences for different seeds
 #[test]
 fn test_seeded_rng_different_seeds() {
-    use rand::Rng;
-
-    const NUM_SAMPLES: usize = 100;
-
     // Generate sequence with seed 42
-    let mut rng1 = ChaCha8Rng::seed_from_u64(42);
+    let mut rng1 = ChaCha8Rng::seed_from_u64(TEST_SEED_1);
     let sequence1: Vec<f64> = (0..NUM_SAMPLES).map(|_| rng1.gen::<f64>()).collect();
 
     // Generate sequence with seed 43
-    let mut rng2 = ChaCha8Rng::seed_from_u64(43);
+    let mut rng2 = ChaCha8Rng::seed_from_u64(TEST_SEED_2);
     let sequence2: Vec<f64> = (0..NUM_SAMPLES).map(|_| rng2.gen::<f64>()).collect();
 
     // Sequences must be different
@@ -132,18 +135,14 @@ fn test_seeded_rng_different_seeds() {
 /// Test combined determinism: hash of RNG-generated data
 #[test]
 fn test_combined_hash_and_rng_determinism() {
-    use rand::Rng;
-
-    const SEED: u64 = 123;
-
     // Run 1: Generate random data and hash it
-    let mut rng1 = ChaCha8Rng::seed_from_u64(SEED);
-    let data1: Vec<u8> = (0..32).map(|_| rng1.gen::<u8>()).collect();
+    let mut rng1 = ChaCha8Rng::seed_from_u64(TEST_SEED_3);
+    let data1: Vec<u8> = (0..NUM_RANDOM_BYTES).map(|_| rng1.gen::<u8>()).collect();
     let hash1 = stable_hash_bytes(&data1);
 
     // Run 2: Generate random data with same seed and hash it
-    let mut rng2 = ChaCha8Rng::seed_from_u64(SEED);
-    let data2: Vec<u8> = (0..32).map(|_| rng2.gen::<u8>()).collect();
+    let mut rng2 = ChaCha8Rng::seed_from_u64(TEST_SEED_3);
+    let data2: Vec<u8> = (0..NUM_RANDOM_BYTES).map(|_| rng2.gen::<u8>()).collect();
     let hash2 = stable_hash_bytes(&data2);
 
     // Data and hashes must be identical
@@ -157,8 +156,8 @@ fn test_hash_stability_in_loop() {
     let data = b"loop test data";
     let expected_hash = stable_hash_bytes(data);
 
-    // Hash the same data 1000 times and verify stability
-    for _ in 0..1000 {
+    // Hash the same data many times and verify stability
+    for _ in 0..NUM_ITERATIONS {
         let hash = stable_hash_bytes(data);
         assert_eq!(hash, expected_hash, "Hash should remain stable across iterations");
     }
@@ -167,18 +166,14 @@ fn test_hash_stability_in_loop() {
 /// Test RNG stability across multiple resets
 #[test]
 fn test_rng_stability_across_resets() {
-    use rand::Rng;
-
-    const SEED: u64 = 999;
-
     // Generate reference sequence
-    let mut rng_ref = ChaCha8Rng::seed_from_u64(SEED);
-    let expected: Vec<f64> = (0..50).map(|_| rng_ref.gen::<f64>()).collect();
+    let mut rng_ref = ChaCha8Rng::seed_from_u64(TEST_SEED_4);
+    let expected: Vec<f64> = (0..NUM_SAMPLES_SMALL).map(|_| rng_ref.gen::<f64>()).collect();
 
-    // Test 10 times that we get the same sequence after resetting
-    for _ in 0..10 {
-        let mut rng = ChaCha8Rng::seed_from_u64(SEED);
-        let sequence: Vec<f64> = (0..50).map(|_| rng.gen::<f64>()).collect();
+    // Test multiple times that we get the same sequence after resetting
+    for _ in 0..NUM_RESET_TESTS {
+        let mut rng = ChaCha8Rng::seed_from_u64(TEST_SEED_4);
+        let sequence: Vec<f64> = (0..NUM_SAMPLES_SMALL).map(|_| rng.gen::<f64>()).collect();
         assert_eq!(sequence, expected, "RNG sequence should be stable after reset");
     }
 }
