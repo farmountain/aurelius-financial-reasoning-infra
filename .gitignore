@@ -1,0 +1,23 @@
+# Rust
+/target/
+**/target/
+Cargo.lock
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs (but keep examples)
+/tmp/
+*.csv
+*.parquet
+!examples/*.json
+!examples/*.csv
+!examples/*.parquet

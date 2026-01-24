@@ -1,0 +1,21 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "quant_engine"
+path = "src/main.rs"
+
+[dependencies]
+schema = { workspace = true }
+cost = { workspace = true }
+broker_sim = { workspace = true }
+engine = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+polars = { workspace = true }

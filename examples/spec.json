@@ -1,0 +1,16 @@
+{
+  "initial_cash": 100000.0,
+  "seed": 42,
+  "strategy": {
+    "type": "ts_momentum",
+    "symbol": "AAPL",
+    "lookback": 20,
+    "vol_target": 0.15,
+    "vol_lookback": 20
+  },
+  "cost_model": {
+    "type": "fixed_per_share",
+    "cost_per_share": 0.005,
+    "minimum_commission": 1.0
+  }
+}

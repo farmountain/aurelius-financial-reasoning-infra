@@ -1,0 +1,20 @@
+[package]
+name = "engine"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+schema = { workspace = true }
+broker_sim = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+csv = { workspace = true }
+polars = { workspace = true }
+
+[dev-dependencies]
+cost = { workspace = true }
+sha2 = { workspace = true }
