@@ -22,6 +22,10 @@ Thumbs.db
 !examples/*.csv
 !examples/*.parquet
 
+# Benchmark and demo outputs
+benchmark_demo_output/
+.hipcortex_demo/
+
 # Python
 __pycache__/
 *.py[cod]
