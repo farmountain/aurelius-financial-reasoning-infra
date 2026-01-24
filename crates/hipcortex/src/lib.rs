@@ -1,15 +1,16 @@
+#![forbid(unsafe_code)]
+
 pub mod artifact;
-pub mod storage;
 pub mod audit;
 pub mod index;
 pub mod repository;
+pub mod storage;
 
 pub use artifact::{
-    Artifact, StrategySpec, Dataset, BacktestConfig, BacktestResult, 
-    CRVReportArtifact, Trace, CostModelConfig, PolicyConstraints,
-    DatasetMetadata
+    Artifact, BacktestConfig, BacktestResult, CRVReportArtifact, CostModelConfig, Dataset,
+    DatasetMetadata, PolicyConstraints, StrategySpec, Trace,
 };
-pub use storage::{ContentHash, ContentStore};
 pub use audit::{AuditLog, CommitEntry};
-pub use index::{MetadataIndex, ArtifactMetadata, SearchQuery};
+pub use index::{ArtifactMetadata, MetadataIndex, SearchQuery};
 pub use repository::Repository;
+pub use storage::{ContentHash, ContentStore};

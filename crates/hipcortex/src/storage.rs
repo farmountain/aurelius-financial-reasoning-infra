@@ -23,14 +23,13 @@ impl ContentHash {
     /// Compute hash from artifact
     pub fn compute(artifact: &Artifact) -> Result<Self> {
         // Serialize to canonical JSON (sorted keys)
-        let json = serde_json::to_vec(artifact)
-            .context("Failed to serialize artifact")?;
-        
+        let json = serde_json::to_vec(artifact).context("Failed to serialize artifact")?;
+
         // Compute SHA-256 hash
         let mut hasher = Sha256::new();
         hasher.update(&json);
         let hash = hasher.finalize();
-        
+
         Ok(Self(hex::encode(hash)))
     }
 }
@@ -50,8 +49,7 @@ impl ContentStore {
     /// Create a new content store at the given path
     pub fn new<P: AsRef<Path>>(root: P) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
-        fs::create_dir_all(&root)
-            .context("Failed to create content store directory")?;
+        fs::create_dir_all(&root).context("Failed to create content store directory")?;
         Ok(Self { root })
     }
 
@@ -59,29 +57,24 @@ impl ContentStore {
     pub fn store(&self, artifact: &Artifact) -> Result<ContentHash> {
         let hash = ContentHash::compute(artifact)?;
         let path = self.artifact_path(&hash);
-        
+
         // Create subdirectory based on first two characters of hash
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create artifact subdirectory")?;
+            fs::create_dir_all(parent).context("Failed to create artifact subdirectory")?;
         }
-        
+
         // Write artifact to file
-        let json = serde_json::to_vec_pretty(artifact)
-            .context("Failed to serialize artifact")?;
-        fs::write(&path, json)
-            .context("Failed to write artifact to store")?;
-        
+        let json = serde_json::to_vec_pretty(artifact).context("Failed to serialize artifact")?;
+        fs::write(&path, json).context("Failed to write artifact to store")?;
+
         Ok(hash)
     }
 
     /// Retrieve an artifact by its content hash
     pub fn retrieve(&self, hash: &ContentHash) -> Result<Artifact> {
         let path = self.artifact_path(hash);
-        let data = fs::read(&path)
-            .with_context(|| format!("Failed to read artifact {}", hash))?;
-        let artifact = serde_json::from_slice(&data)
-            .context("Failed to deserialize artifact")?;
+        let data = fs::read(&path).with_context(|| format!("Failed to read artifact {}", hash))?;
+        let artifact = serde_json::from_slice(&data).context("Failed to deserialize artifact")?;
         Ok(artifact)
     }
 
@@ -222,7 +215,9 @@ mod tests {
         assert!(store.exists(&hash));
 
         // Non-existent hash should not exist
-        let fake_hash = ContentHash::from_hex("0000000000000000000000000000000000000000000000000000000000000000".to_string());
+        let fake_hash = ContentHash::from_hex(
+            "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+        );
         assert!(!store.exists(&fake_hash));
     }
 }

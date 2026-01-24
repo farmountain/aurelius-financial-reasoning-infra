@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use anyhow::Result;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -7,7 +9,7 @@ use schema::{Bar, BrokerSim, CostModel, Fill, Order, OrderType, Side};
 pub struct SimpleBroker<C: CostModel> {
     cost_model: C,
     #[allow(dead_code)]
-    rng: ChaCha8Rng,  // For future stochastic features, currently unused but seeded for determinism
+    rng: ChaCha8Rng, // For future stochastic features, currently unused but seeded for determinism
 }
 
 impl<C: CostModel> SimpleBroker<C> {
@@ -29,12 +31,16 @@ impl<C: CostModel> BrokerSim for SimpleBroker<C> {
                 OrderType::Market => {
                     // Fill at the close price of the bar
                     let fill_price = bar.close;
-                    
+
                     // Calculate commission
-                    let commission = self.cost_model.calculate_commission(order.quantity, fill_price);
-                    
+                    let commission = self
+                        .cost_model
+                        .calculate_commission(order.quantity, fill_price);
+
                     // Apply slippage (if any)
-                    let slippage = self.cost_model.calculate_slippage(order.quantity, fill_price, order.side);
+                    let slippage =
+                        self.cost_model
+                            .calculate_slippage(order.quantity, fill_price, order.side);
                     let adjusted_price = match order.side {
                         Side::Buy => fill_price + slippage,
                         Side::Sell => fill_price - slippage,
@@ -81,7 +87,7 @@ mod tests {
     #[test]
     fn test_market_order_execution() {
         let mut broker = SimpleBroker::new(ZeroCost, 42);
-        
+
         let bar = Bar {
             timestamp: 1000,
             symbol: "AAPL".to_string(),
@@ -101,7 +107,7 @@ mod tests {
         }];
 
         let fills = broker.process_orders(orders, &bar).unwrap();
-        
+
         assert_eq!(fills.len(), 1);
         assert_eq!(fills[0].symbol, "AAPL");
         assert_eq!(fills[0].quantity, 10.0);

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -37,8 +39,7 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Backtest { spec, data, out } => {
-            backtest_cmd::run_backtest(&spec, &data, &out)
-                .context("Failed to run backtest")?;
+            backtest_cmd::run_backtest(&spec, &data, &out).context("Failed to run backtest")?;
         }
     }
 

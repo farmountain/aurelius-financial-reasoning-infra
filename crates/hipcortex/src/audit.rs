@@ -24,19 +24,17 @@ impl AuditLog {
     /// Create a new audit log at the given path
     pub fn new<P: AsRef<Path>>(path: P) -> Result<Self> {
         let path = path.as_ref().to_path_buf();
-        
+
         // Create parent directory if it doesn't exist
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .context("Failed to create audit log directory")?;
+            std::fs::create_dir_all(parent).context("Failed to create audit log directory")?;
         }
-        
+
         // Create file if it doesn't exist
         if !path.exists() {
-            File::create(&path)
-                .context("Failed to create audit log file")?;
+            File::create(&path).context("Failed to create audit log file")?;
         }
-        
+
         Ok(Self { path })
     }
 
@@ -47,13 +45,11 @@ impl AuditLog {
             .create(true)
             .open(&self.path)
             .context("Failed to open audit log for append")?;
-        
-        let json = serde_json::to_string(entry)
-            .context("Failed to serialize commit entry")?;
-        
-        writeln!(file, "{}", json)
-            .context("Failed to write to audit log")?;
-        
+
+        let json = serde_json::to_string(entry).context("Failed to serialize commit entry")?;
+
+        writeln!(file, "{}", json).context("Failed to write to audit log")?;
+
         Ok(())
     }
 
@@ -62,22 +58,21 @@ impl AuditLog {
         if !self.path.exists() {
             return Ok(Vec::new());
         }
-        
-        let file = File::open(&self.path)
-            .context("Failed to open audit log for reading")?;
+
+        let file = File::open(&self.path).context("Failed to open audit log for reading")?;
         let reader = BufReader::new(file);
-        
+
         let mut entries = Vec::new();
         for line in reader.lines() {
             let line = line.context("Failed to read line from audit log")?;
             if line.trim().is_empty() {
                 continue;
             }
-            let entry: CommitEntry = serde_json::from_str(&line)
-                .context("Failed to deserialize commit entry")?;
+            let entry: CommitEntry =
+                serde_json::from_str(&line).context("Failed to deserialize commit entry")?;
             entries.push(entry);
         }
-        
+
         Ok(entries)
     }
 

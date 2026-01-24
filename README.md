@@ -2,6 +2,47 @@
 
 An Evidence-Gated Intelligence Engine for Quant Reasoning - Event-Driven Backtest Engine in Rust
 
+## Quick Start
+
+### Prerequisites
+
+- **Rust**: 1.70.0 or later (install from [rust-lang.org](https://rust-lang.org))
+- **Make**: GNU Make or compatible (for CI commands)
+- **Python**: 3.9+ (optional, for Python orchestrator)
+
+### Build and Test
+
+Run the full CI pipeline to verify all gates pass:
+
+```bash
+make ci
+```
+
+This will execute:
+1. **Formatting check**: `cargo fmt --check` - ensures code is formatted
+2. **Linting**: `cargo clippy` - runs static analysis with pedantic warnings
+3. **Tests**: `cargo test --all` - runs all unit and integration tests
+
+### Individual Commands
+
+```bash
+make fmt         # Autoformat code
+make fmt-check   # Check formatting without modifying
+make clippy      # Run linter (Sprint 1: warnings only, no PR failures)
+make test        # Run all tests
+```
+
+### Determinism Guarantee (Sprint 1)
+
+All randomness is **seeded** using `ChaCha8Rng` with explicit seeds:
+- Backtest engine: seed from config file
+- Broker simulator: seed passed at construction
+- Tests: hardcoded seed (e.g., `seed = 42`)
+
+**No system time dependencies** - timestamps are simulation time only.
+
+**Verification**: The `crv_verifier` crate includes `test_hash_stability_across_runs` which validates that backtest outputs produce identical SHA-256 hashes across multiple runs.
+
 ## Overview
 
 This project implements a deterministic, event-driven backtesting engine for quantitative trading strategies. The engine is designed with:
@@ -11,6 +52,7 @@ This project implements a deterministic, event-driven backtesting engine for qua
 - **Portfolio accounting**: Tracks positions, cash, realized/unrealized PnL
 - **Pluggable components**: Modular traits for data feeds, strategies, brokers, and cost models
 - **Comprehensive testing**: 90%+ test coverage for critical modules
+- **Safety**: All crates forbid unsafe code with `#![forbid(unsafe_code)]`
 
 ## Architecture
 

@@ -36,18 +36,20 @@ impl TsMomentumStrategy {
         if self.return_history.len() < self.vol_lookback {
             return None;
         }
-        let recent_returns: Vec<f64> = self.return_history
+        let recent_returns: Vec<f64> = self
+            .return_history
             .iter()
             .rev()
             .take(self.vol_lookback)
             .copied()
             .collect();
-        
+
         let mean = recent_returns.iter().sum::<f64>() / recent_returns.len() as f64;
         let variance = recent_returns
             .iter()
             .map(|r| (r - mean).powi(2))
-            .sum::<f64>() / recent_returns.len() as f64;
+            .sum::<f64>()
+            / recent_returns.len() as f64;
         Some(variance.sqrt())
     }
 
@@ -187,11 +189,11 @@ mod tests {
             .collect();
 
         let mut hashes = Vec::new();
-        
+
         for _ in 0..3 {
             let mut strategy = TsMomentumStrategy::new("AAPL".to_string(), 5, 0.1, 5);
             let portfolio = Portfolio::new(10000.0);
-            
+
             let mut hasher = DefaultHasher::new();
             for bar in &bars {
                 let orders = strategy.on_bar(bar, &portfolio);
@@ -200,7 +202,7 @@ mod tests {
                     order.quantity.to_bits().hash(&mut hasher);
                 }
             }
-            
+
             hashes.push(hasher.finish());
         }
 

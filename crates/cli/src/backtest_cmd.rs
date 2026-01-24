@@ -13,18 +13,16 @@ use crate::strategies::TsMomentumStrategy;
 
 pub fn run_backtest(spec_path: &Path, data_path: &Path, out_dir: &Path) -> Result<()> {
     // Read spec
-    let spec_str = fs::read_to_string(spec_path)
-        .context("Failed to read spec file")?;
-    let spec: BacktestSpec = serde_json::from_str(&spec_str)
-        .context("Failed to parse spec JSON")?;
+    let spec_str = fs::read_to_string(spec_path).context("Failed to read spec file")?;
+    let spec: BacktestSpec =
+        serde_json::from_str(&spec_str).context("Failed to parse spec JSON")?;
 
     // Create output directory
-    fs::create_dir_all(out_dir)
-        .context("Failed to create output directory")?;
+    fs::create_dir_all(out_dir).context("Failed to create output directory")?;
 
     // Load data from parquet
     let bars = load_bars_from_parquet(data_path)?;
-    
+
     println!("Loaded {} bars", bars.len());
     println!("Running backtest with {} strategy", spec.strategy_name());
     println!("Initial cash: ${:.2}", spec.initial_cash);
@@ -35,20 +33,16 @@ pub fn run_backtest(spec_path: &Path, data_path: &Path, out_dir: &Path) -> Resul
 
     // Run backtest based on strategy type
     match &spec.strategy {
-        StrategySpec::TsMomentum { symbol, lookback, vol_target, vol_lookback } => {
-            let strategy = TsMomentumStrategy::new(
-                symbol.clone(),
-                *lookback,
-                *vol_target,
-                *vol_lookback,
-            );
+        StrategySpec::TsMomentum {
+            symbol,
+            lookback,
+            vol_target,
+            vol_lookback,
+        } => {
+            let strategy =
+                TsMomentumStrategy::new(symbol.clone(), *lookback, *vol_target, *vol_lookback);
 
-            run_backtest_with_strategy(
-                data_feed,
-                strategy,
-                &spec,
-                out_dir,
-            )?;
+            run_backtest_with_strategy(data_feed, strategy, &spec, out_dir)?;
         }
     }
 
@@ -64,27 +58,22 @@ fn run_backtest_with_strategy<S: schema::Strategy>(
 ) -> Result<()> {
     // Create cost model
     let cost_model: Box<dyn CostModel> = match &spec.cost_model {
-        CostModelSpec::FixedPerShare { cost_per_share, minimum_commission } => {
-            Box::new(FixedPerShareCost::new(*cost_per_share, *minimum_commission))
-        }
-        CostModelSpec::Percentage { percentage, minimum_commission } => {
-            Box::new(PercentageCost::new(*percentage, *minimum_commission))
-        }
-        CostModelSpec::Zero => {
-            Box::new(ZeroCost)
-        }
+        CostModelSpec::FixedPerShare {
+            cost_per_share,
+            minimum_commission,
+        } => Box::new(FixedPerShareCost::new(*cost_per_share, *minimum_commission)),
+        CostModelSpec::Percentage {
+            percentage,
+            minimum_commission,
+        } => Box::new(PercentageCost::new(*percentage, *minimum_commission)),
+        CostModelSpec::Zero => Box::new(ZeroCost),
     };
 
     // Create broker with deterministic seed
     let broker = SimpleBroker::new(cost_model, spec.seed);
 
     // Create and run engine
-    let mut engine = BacktestEngine::new(
-        data_feed,
-        strategy,
-        broker,
-        spec.initial_cash,
-    );
+    let mut engine = BacktestEngine::new(data_feed, strategy, broker, spec.initial_cash);
 
     engine.run()?;
 
@@ -111,22 +100,21 @@ fn run_backtest_with_strategy<S: schema::Strategy>(
     println!("\n=== Running CRV Verification ===");
     let constraints = PolicyConstraints::default();
     let verifier = CRVVerifier::new(constraints);
-    
-    let crv_report = verifier.verify(
-        &stats,
-        engine.fills(),
-        engine.equity_history(),
-    )?;
-    
+
+    let crv_report = verifier.verify(&stats, engine.fills(), engine.equity_history())?;
+
     let crv_path = out_dir.join("crv_report.json");
     let crv_file = fs::File::create(&crv_path)?;
     serde_json::to_writer_pretty(crv_file, &crv_report)?;
     println!("Wrote CRV report to {:?}", crv_path);
-    
+
     if crv_report.passed {
         println!("✓ CRV verification passed");
     } else {
-        println!("✗ CRV verification failed with {} violation(s)", crv_report.violation_count());
+        println!(
+            "✗ CRV verification failed with {} violation(s)",
+            crv_report.violation_count()
+        );
         for (i, violation) in crv_report.violations.iter().enumerate() {
             println!("\n  Violation #{}:", i + 1);
             println!("    Rule: {:?}", violation.rule_id);
@@ -155,16 +143,39 @@ fn run_backtest_with_strategy<S: schema::Strategy>(
 }
 
 fn load_bars_from_parquet(path: &Path) -> Result<Vec<Bar>> {
-    let df = LazyFrame::scan_parquet(path, Default::default())?
-        .collect()?;
+    let df = LazyFrame::scan_parquet(path, Default::default())?.collect()?;
 
-    let timestamps = df.column("timestamp")?.i64()?.into_no_null_iter().collect::<Vec<_>>();
+    let timestamps = df
+        .column("timestamp")?
+        .i64()?
+        .into_no_null_iter()
+        .collect::<Vec<_>>();
     let symbols = df.column("symbol")?.str()?.into_iter().collect::<Vec<_>>();
-    let opens = df.column("open")?.f64()?.into_no_null_iter().collect::<Vec<_>>();
-    let highs = df.column("high")?.f64()?.into_no_null_iter().collect::<Vec<_>>();
-    let lows = df.column("low")?.f64()?.into_no_null_iter().collect::<Vec<_>>();
-    let closes = df.column("close")?.f64()?.into_no_null_iter().collect::<Vec<_>>();
-    let volumes = df.column("volume")?.f64()?.into_no_null_iter().collect::<Vec<_>>();
+    let opens = df
+        .column("open")?
+        .f64()?
+        .into_no_null_iter()
+        .collect::<Vec<_>>();
+    let highs = df
+        .column("high")?
+        .f64()?
+        .into_no_null_iter()
+        .collect::<Vec<_>>();
+    let lows = df
+        .column("low")?
+        .f64()?
+        .into_no_null_iter()
+        .collect::<Vec<_>>();
+    let closes = df
+        .column("close")?
+        .f64()?
+        .into_no_null_iter()
+        .collect::<Vec<_>>();
+    let volumes = df
+        .column("volume")?
+        .f64()?
+        .into_no_null_iter()
+        .collect::<Vec<_>>();
 
     let bars = timestamps
         .iter()

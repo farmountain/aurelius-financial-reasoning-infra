@@ -27,7 +27,7 @@ impl PortfolioManager {
 
         // Get or create position
         let position = self.portfolio.get_position_mut(&fill.symbol);
-        
+
         let old_quantity = position.quantity;
         let old_avg_price = position.avg_price;
 
@@ -42,16 +42,16 @@ impl PortfolioManager {
         // Handle realized PnL when closing or reducing a position
         if old_quantity.abs() > 1e-8 {
             // Check if we're closing or reducing the position (different direction)
-            let is_closing = (old_quantity > 0.0 && quantity_delta < 0.0) ||
-                            (old_quantity < 0.0 && quantity_delta > 0.0);
-            
+            let is_closing = (old_quantity > 0.0 && quantity_delta < 0.0)
+                || (old_quantity < 0.0 && quantity_delta > 0.0);
+
             if is_closing {
                 // Position is being closed or reduced
                 let closed_quantity = quantity_delta.abs().min(old_quantity.abs());
 
                 let exit_price = fill.price;
                 let entry_price = old_avg_price;
-                
+
                 let pnl = if old_quantity > 0.0 {
                     // Closing long position
                     closed_quantity * (exit_price - entry_price)
@@ -71,8 +71,9 @@ impl PortfolioManager {
             position.avg_price = 0.0;
         } else {
             // Update average price for the new quantity
-            if (old_quantity >= 0.0 && new_quantity > old_quantity) || 
-               (old_quantity <= 0.0 && new_quantity < old_quantity) {
+            if (old_quantity >= 0.0 && new_quantity > old_quantity)
+                || (old_quantity <= 0.0 && new_quantity < old_quantity)
+            {
                 // Adding to position - update average price
                 let old_value = old_quantity * old_avg_price;
                 let new_value = quantity_delta * fill.price;
@@ -105,7 +106,8 @@ impl PortfolioManager {
             }
         }
         self.portfolio.equity = self.portfolio.cash + positions_value;
-        self.equity_history.push((self.portfolio.timestamp, self.portfolio.equity));
+        self.equity_history
+            .push((self.portfolio.timestamp, self.portfolio.equity));
     }
 
     pub fn portfolio(&self) -> &Portfolio {
@@ -159,7 +161,7 @@ mod tests {
 
         let portfolio = pm.portfolio();
         assert_eq!(portfolio.cash, 10000.0 - 1000.0 - 5.0);
-        
+
         let position = portfolio.get_position("AAPL").unwrap();
         assert_eq!(position.quantity, 10.0);
         assert_eq!(position.avg_price, 100.0);
@@ -199,14 +201,14 @@ mod tests {
 
         // Should have realized profit of $100 (10 shares * $10 gain)
         assert_eq!(pm.realized_pnl(), 100.0);
-        
+
         // Total commission should be $10
         assert_eq!(pm.total_commission(), 10.0);
 
         // Cash should be initial + profit - commission
         let portfolio = pm.portfolio();
         assert_eq!(portfolio.cash, 10000.0 + 100.0 - 10.0);
-        
+
         // Position should be flat
         let position = portfolio.get_position("AAPL").unwrap();
         assert!(position.is_flat());
@@ -217,7 +219,7 @@ mod tests {
         // Test: Initial equity = cash + positions value at all times (minus commissions)
         let mut pm = PortfolioManager::new(10000.0);
         let initial_equity = 10000.0;
-        
+
         let mut prices = HashMap::new();
         prices.insert("AAPL".to_string(), 100.0);
 
@@ -277,7 +279,7 @@ mod tests {
 
         // Should have realized profit of $50 (5 shares * $10 gain)
         assert_eq!(pm.realized_pnl(), 50.0);
-        
+
         // Should still hold 5 shares
         let position = pm.portfolio().get_position("AAPL").unwrap();
         assert_eq!(position.quantity, 5.0);

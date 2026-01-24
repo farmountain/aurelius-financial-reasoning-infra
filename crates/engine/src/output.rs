@@ -6,9 +6,16 @@ use std::path::Path;
 /// Write trades to CSV
 pub fn write_trades_csv(fills: &[Fill], output_path: &Path) -> Result<()> {
     let mut wtr = csv::Writer::from_writer(File::create(output_path)?);
-    
-    wtr.write_record(&["timestamp", "symbol", "side", "quantity", "price", "commission"])?;
-    
+
+    wtr.write_record(&[
+        "timestamp",
+        "symbol",
+        "side",
+        "quantity",
+        "price",
+        "commission",
+    ])?;
+
     for fill in fills {
         wtr.write_record(&[
             fill.timestamp.to_string(),
@@ -19,7 +26,7 @@ pub fn write_trades_csv(fills: &[Fill], output_path: &Path) -> Result<()> {
             fill.commission.to_string(),
         ])?;
     }
-    
+
     wtr.flush()?;
     Ok(())
 }
@@ -27,13 +34,13 @@ pub fn write_trades_csv(fills: &[Fill], output_path: &Path) -> Result<()> {
 /// Write equity curve to CSV
 pub fn write_equity_curve_csv(equity_history: &[(i64, f64)], output_path: &Path) -> Result<()> {
     let mut wtr = csv::Writer::from_writer(File::create(output_path)?);
-    
+
     wtr.write_record(&["timestamp", "equity"])?;
-    
+
     for (timestamp, equity) in equity_history {
         wtr.write_record(&[timestamp.to_string(), equity.to_string()])?;
     }
-    
+
     wtr.flush()?;
     Ok(())
 }
@@ -65,7 +72,7 @@ pub fn calculate_stats(
 
     let initial_equity = equity_history[0].1;
     let final_equity = equity_history.last().unwrap().1;
-    
+
     // Guard against division by zero
     if initial_equity <= 0.0 {
         return BacktestStats {
@@ -78,7 +85,7 @@ pub fn calculate_stats(
             max_drawdown: 0.0,
         };
     }
-    
+
     let total_return = (final_equity - initial_equity) / initial_equity;
 
     // Calculate returns for Sharpe ratio
@@ -93,7 +100,8 @@ pub fn calculate_stats(
 
     let sharpe_ratio = if returns.len() > 1 {
         let mean = returns.iter().sum::<f64>() / returns.len() as f64;
-        let variance = returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / returns.len() as f64;
+        let variance =
+            returns.iter().map(|r| (r - mean).powi(2)).sum::<f64>() / returns.len() as f64;
         let std_dev = variance.sqrt();
         if std_dev > 0.0 {
             mean / std_dev * (252.0_f64).sqrt() // Annualized Sharpe
@@ -137,11 +145,7 @@ mod tests {
 
     #[test]
     fn test_calculate_stats_simple() {
-        let equity_history = vec![
-            (0, 10000.0),
-            (1, 10500.0),
-            (2, 11000.0),
-        ];
+        let equity_history = vec![(0, 10000.0), (1, 10500.0), (2, 11000.0)];
 
         let stats = calculate_stats(&equity_history, 2, 10.0);
 
@@ -156,8 +160,8 @@ mod tests {
     fn test_calculate_stats_with_drawdown() {
         let equity_history = vec![
             (0, 10000.0),
-            (1, 12000.0),  // Peak
-            (2, 9000.0),   // Drawdown of 25%
+            (1, 12000.0), // Peak
+            (2, 9000.0),  // Drawdown of 25%
             (3, 11000.0),
         ];
 

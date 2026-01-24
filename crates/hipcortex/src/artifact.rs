@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use schema::{BacktestStats, Bar, EquityPoint, Fill};
 use crv_verifier::CRVReport;
+use schema::{BacktestStats, Bar, EquityPoint, Fill};
+use serde::{Deserialize, Serialize};
 
 /// Artifact types supported by HipCortex
 #[derive(Debug, Clone, Serialize, Deserialize)]

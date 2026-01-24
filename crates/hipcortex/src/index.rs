@@ -23,9 +23,8 @@ pub struct MetadataIndex {
 impl MetadataIndex {
     /// Create a new metadata index at the given database path
     pub fn new<P: AsRef<Path>>(db_path: P) -> Result<Self> {
-        let conn = Connection::open(db_path)
-            .context("Failed to open SQLite database")?;
-        
+        let conn = Connection::open(db_path).context("Failed to open SQLite database")?;
+
         // Create tables
         conn.execute(
             "CREATE TABLE IF NOT EXISTS artifacts (
@@ -37,7 +36,8 @@ impl MetadataIndex {
                 description TEXT
             )",
             [],
-        ).context("Failed to create artifacts table")?;
+        )
+        .context("Failed to create artifacts table")?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS regime_tags (
@@ -47,35 +47,39 @@ impl MetadataIndex {
                 FOREIGN KEY (hash) REFERENCES artifacts(hash)
             )",
             [],
-        ).context("Failed to create regime_tags table")?;
+        )
+        .context("Failed to create regime_tags table")?;
 
         // Create indices for fast searching
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_artifact_type ON artifacts(artifact_type)",
             [],
-        ).context("Failed to create artifact_type index")?;
+        )
+        .context("Failed to create artifact_type index")?;
 
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_goal ON artifacts(goal)",
-            [],
-        ).context("Failed to create goal index")?;
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_goal ON artifacts(goal)", [])
+            .context("Failed to create goal index")?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_timestamp ON artifacts(timestamp)",
             [],
-        ).context("Failed to create timestamp index")?;
+        )
+        .context("Failed to create timestamp index")?;
 
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_regime_tag ON regime_tags(tag)",
             [],
-        ).context("Failed to create regime_tag index")?;
+        )
+        .context("Failed to create regime_tag index")?;
 
         Ok(Self { conn })
     }
 
     /// Index an artifact's metadata
     pub fn index(&mut self, metadata: &ArtifactMetadata) -> Result<()> {
-        let tx = self.conn.transaction()
+        let tx = self
+            .conn
+            .transaction()
             .context("Failed to start transaction")?;
 
         tx.execute(
@@ -95,13 +99,15 @@ impl MetadataIndex {
         tx.execute(
             "DELETE FROM regime_tags WHERE hash = ?1",
             params![&metadata.hash],
-        ).context("Failed to delete old regime tags")?;
+        )
+        .context("Failed to delete old regime tags")?;
 
         for tag in &metadata.regime_tags {
             tx.execute(
                 "INSERT INTO regime_tags (hash, tag) VALUES (?1, ?2)",
                 params![&metadata.hash, tag],
-            ).context("Failed to insert regime tag")?;
+            )
+            .context("Failed to insert regime tag")?;
         }
 
         tx.commit().context("Failed to commit transaction")?;
@@ -112,7 +118,7 @@ impl MetadataIndex {
     pub fn search(&self, query: &SearchQuery) -> Result<Vec<ArtifactMetadata>> {
         let mut sql = String::from(
             "SELECT DISTINCT a.hash, a.artifact_type, a.timestamp, a.goal, a.policy, a.description
-             FROM artifacts a"
+             FROM artifacts a",
         );
 
         let mut conditions = Vec::new();
@@ -178,26 +184,31 @@ impl MetadataIndex {
             params_vec.push(Box::new(limit as i64));
         }
 
-        let params_refs: Vec<&dyn rusqlite::ToSql> = params_vec.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
 
-        let mut stmt = self.conn.prepare(&sql)
+        let mut stmt = self
+            .conn
+            .prepare(&sql)
             .context("Failed to prepare search query")?;
 
-        let rows = stmt.query_map(params_refs.as_slice(), |row| {
-            let hash: String = row.get(0)?;
-            let artifact_type: String = row.get(1)?;
-            let timestamp: i64 = row.get(2)?;
-            let goal: Option<String> = row.get(3)?;
-            let policy: Option<String> = row.get(4)?;
-            let description: Option<String> = row.get(5)?;
+        let rows = stmt
+            .query_map(params_refs.as_slice(), |row| {
+                let hash: String = row.get(0)?;
+                let artifact_type: String = row.get(1)?;
+                let timestamp: i64 = row.get(2)?;
+                let goal: Option<String> = row.get(3)?;
+                let policy: Option<String> = row.get(4)?;
+                let description: Option<String> = row.get(5)?;
 
-            Ok((hash, artifact_type, timestamp, goal, policy, description))
-        }).context("Failed to execute search query")?;
+                Ok((hash, artifact_type, timestamp, goal, policy, description))
+            })
+            .context("Failed to execute search query")?;
 
         let mut results = Vec::new();
         for row in rows {
-            let (hash, artifact_type, timestamp, goal, policy, description) = row
-                .context("Failed to read row")?;
+            let (hash, artifact_type, timestamp, goal, policy, description) =
+                row.context("Failed to read row")?;
 
             // Fetch regime tags for this artifact
             let regime_tags = self.get_regime_tags(&hash)?;
@@ -218,13 +229,14 @@ impl MetadataIndex {
 
     /// Get regime tags for a specific artifact
     fn get_regime_tags(&self, hash: &str) -> Result<Vec<String>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT tag FROM regime_tags WHERE hash = ?1"
-        ).context("Failed to prepare regime tags query")?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT tag FROM regime_tags WHERE hash = ?1")
+            .context("Failed to prepare regime tags query")?;
 
-        let tags = stmt.query_map(params![hash], |row| {
-            row.get(0)
-        }).context("Failed to execute regime tags query")?;
+        let tags = stmt
+            .query_map(params![hash], |row| row.get(0))
+            .context("Failed to execute regime tags query")?;
 
         let mut result = Vec::new();
         for tag in tags {
@@ -236,12 +248,16 @@ impl MetadataIndex {
 
     /// Get metadata for a specific artifact
     pub fn get(&self, hash: &ContentHash) -> Result<Option<ArtifactMetadata>> {
-        let mut stmt = self.conn.prepare(
-            "SELECT hash, artifact_type, timestamp, goal, policy, description
-             FROM artifacts WHERE hash = ?1"
-        ).context("Failed to prepare get query")?;
+        let mut stmt = self
+            .conn
+            .prepare(
+                "SELECT hash, artifact_type, timestamp, goal, policy, description
+             FROM artifacts WHERE hash = ?1",
+            )
+            .context("Failed to prepare get query")?;
 
-        let mut rows = stmt.query(params![hash.as_hex()])
+        let mut rows = stmt
+            .query(params![hash.as_hex()])
             .context("Failed to execute get query")?;
 
         if let Some(row) = rows.next().context("Failed to read row")? {

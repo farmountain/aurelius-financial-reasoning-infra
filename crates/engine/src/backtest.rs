@@ -1,6 +1,6 @@
+use crate::portfolio::PortfolioManager;
 use anyhow::Result;
 use schema::{BrokerSim, DataFeed, Fill, Strategy};
-use crate::portfolio::PortfolioManager;
 use std::collections::HashMap;
 
 /// Event-driven backtest engine
@@ -14,12 +14,7 @@ pub struct BacktestEngine<D: DataFeed, S: Strategy, B: BrokerSim> {
 }
 
 impl<D: DataFeed, S: Strategy, B: BrokerSim> BacktestEngine<D, S, B> {
-    pub fn new(
-        data_feed: D,
-        strategy: S,
-        broker: B,
-        initial_cash: f64,
-    ) -> Self {
+    pub fn new(data_feed: D, strategy: S, broker: B, initial_cash: f64) -> Self {
         Self {
             data_feed,
             strategy,
@@ -43,17 +38,20 @@ impl<D: DataFeed, S: Strategy, B: BrokerSim> BacktestEngine<D, S, B> {
             self.current_prices.insert(bar.symbol.clone(), bar.close);
 
             // Let strategy generate orders based on current bar and portfolio state
-            let orders = self.strategy.on_bar(&bar, self.portfolio_manager.portfolio());
+            let orders = self
+                .strategy
+                .on_bar(&bar, self.portfolio_manager.portfolio());
 
             // Process orders through broker
             if !orders.is_empty() {
                 let new_fills = self.broker.process_orders(orders, &bar)?;
-                
+
                 // Apply fills to portfolio
                 for fill in &new_fills {
-                    self.portfolio_manager.apply_fill(fill, &self.current_prices)?;
+                    self.portfolio_manager
+                        .apply_fill(fill, &self.current_prices)?;
                 }
-                
+
                 self.fills.extend(new_fills);
             }
 
@@ -111,7 +109,10 @@ mod tests {
 
     impl BuyAndHoldStrategy {
         fn new(symbol: String) -> Self {
-            Self { symbol, bought: false }
+            Self {
+                symbol,
+                bought: false,
+            }
         }
     }
 
@@ -168,7 +169,7 @@ mod tests {
 
         // Should have one fill (the buy)
         assert_eq!(engine.num_trades(), 1);
-        
+
         // Equity should be initial cash - purchase + current value
         let equity_history = engine.equity_history();
         assert!(equity_history.len() >= 2);
@@ -176,7 +177,7 @@ mod tests {
 
     #[test]
     fn test_deterministic_backtest() {
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
 
         let bars = vec![
             Bar {
@@ -201,7 +202,7 @@ mod tests {
 
         // Run backtest 3 times with same seed
         let mut hashes = Vec::new();
-        
+
         for _ in 0..3 {
             let data_feed = VecDataFeed::new(bars.clone());
             let strategy = BuyAndHoldStrategy::new("AAPL".to_string());
@@ -212,20 +213,20 @@ mod tests {
 
             // Create a hash of the results
             let mut hasher = Sha256::new();
-            
+
             // Hash equity history
             for (timestamp, equity) in engine.equity_history() {
                 hasher.update(timestamp.to_le_bytes());
                 hasher.update(equity.to_le_bytes());
             }
-            
+
             // Hash fills
             for fill in engine.fills() {
                 hasher.update(fill.timestamp.to_le_bytes());
                 hasher.update(fill.quantity.to_le_bytes());
                 hasher.update(fill.price.to_le_bytes());
             }
-            
+
             let hash = hasher.finalize();
             hashes.push(hash);
         }

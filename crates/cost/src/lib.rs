@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use schema::{CostModel, Side};
 use serde::{Deserialize, Serialize};
 
@@ -20,7 +22,7 @@ impl FixedPerShareCost {
 impl Default for FixedPerShareCost {
     fn default() -> Self {
         Self {
-            cost_per_share: 0.005,  // $0.005 per share
+            cost_per_share: 0.005,   // $0.005 per share
             minimum_commission: 1.0, // $1 minimum
         }
     }
@@ -41,7 +43,7 @@ impl CostModel for FixedPerShareCost {
 /// Percentage-based commission
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PercentageCost {
-    pub percentage: f64,  // e.g., 0.001 for 0.1%
+    pub percentage: f64, // e.g., 0.001 for 0.1%
     pub minimum_commission: f64,
 }
 
@@ -57,7 +59,7 @@ impl PercentageCost {
 impl Default for PercentageCost {
     fn default() -> Self {
         Self {
-            percentage: 0.001,      // 0.1%
+            percentage: 0.001,       // 0.1%
             minimum_commission: 1.0, // $1 minimum
         }
     }
@@ -97,10 +99,10 @@ mod tests {
     #[test]
     fn test_fixed_per_share_commission() {
         let cost = FixedPerShareCost::new(0.01, 5.0);
-        
+
         // Small trade - should use minimum
         assert_eq!(cost.calculate_commission(100.0, 50.0), 5.0);
-        
+
         // Large trade - should exceed minimum
         assert_eq!(cost.calculate_commission(1000.0, 50.0), 10.0);
     }
@@ -108,10 +110,10 @@ mod tests {
     #[test]
     fn test_percentage_commission() {
         let cost = PercentageCost::new(0.001, 1.0);
-        
+
         // $5000 notional at 0.1% = $5
         assert_eq!(cost.calculate_commission(100.0, 50.0), 5.0);
-        
+
         // Small trade - should use minimum
         assert_eq!(cost.calculate_commission(10.0, 5.0), 1.0);
     }
@@ -138,7 +140,10 @@ mod tests {
 
             // Commission should scale with quantity (or stay at minimum)
             let comm2 = cost_model.calculate_commission(1000.0, 50.0);
-            assert!(comm2 >= comm1, "Commission should not decrease with quantity");
+            assert!(
+                comm2 >= comm1,
+                "Commission should not decrease with quantity"
+            );
 
             // Slippage should be zero or small
             let slippage = cost_model.calculate_slippage(100.0, 50.0, Side::Buy);

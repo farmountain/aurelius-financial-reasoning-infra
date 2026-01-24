@@ -29,8 +29,8 @@ impl Default for PolicyConstraints {
     fn default() -> Self {
         Self {
             max_drawdown: Some(0.25), // 25% default max drawdown
-            max_leverage: Some(2.0),   // 2x default max leverage
-            max_turnover: None,        // No default turnover limit
+            max_leverage: Some(2.0),  // 2x default max leverage
+            max_turnover: None,       // No default turnover limit
         }
     }
 }
@@ -72,9 +72,7 @@ impl CRVVerifier {
             anyhow::bail!("Equity history cannot be empty for CRV verification");
         }
 
-        let mut report = CRVReport::new(
-            equity_history.last().map(|(t, _)| *t).unwrap_or(0)
-        );
+        let mut report = CRVReport::new(equity_history.last().map(|(t, _)| *t).unwrap_or(0));
 
         // Run all checks
         self.check_metric_correctness(stats, equity_history, &mut report)?;
@@ -133,9 +131,10 @@ impl CRVVerifier {
         let traded_count = universe.traded_symbols.len();
         let total_count = universe.total_symbols;
         let traded_pct = (traded_count as f64 / total_count as f64) * 100.0;
-        
-        if traded_pct < SURVIVORSHIP_BIAS_CHERRY_PICKING_THRESHOLD_PCT 
-            && total_count > MIN_UNIVERSE_SIZE_FOR_CHERRY_PICKING {
+
+        if traded_pct < SURVIVORSHIP_BIAS_CHERRY_PICKING_THRESHOLD_PCT
+            && total_count > MIN_UNIVERSE_SIZE_FOR_CHERRY_PICKING
+        {
             report.add_violation(CRVViolation {
                 rule_id: RuleId::SurvivorshipBias,
                 severity: Severity::Medium,
@@ -145,7 +144,8 @@ impl CRVVerifier {
                 ),
                 evidence: vec![
                     "Trading a small subset of universe may indicate cherry-picking".to_string(),
-                    "Verify strategy logic applies consistently to all universe symbols".to_string(),
+                    "Verify strategy logic applies consistently to all universe symbols"
+                        .to_string(),
                 ],
             });
         }
@@ -174,7 +174,10 @@ impl CRVVerifier {
                         stats.sharpe_ratio
                     ),
                     evidence: vec![
-                        format!("Sharpe ratios above {} are extremely rare in practice", SHARPE_RATIO_UNREALISTIC_THRESHOLD),
+                        format!(
+                            "Sharpe ratios above {} are extremely rare in practice",
+                            SHARPE_RATIO_UNREALISTIC_THRESHOLD
+                        ),
                         "Verify annualization is correct (sqrt(252) for daily data)".to_string(),
                     ],
                 });
@@ -190,9 +193,7 @@ impl CRVVerifier {
                     "Max drawdown is out of bounds [0, 1]: {:.4}",
                     stats.max_drawdown
                 ),
-                evidence: vec![
-                    "Max drawdown should be between 0 and 1 (0% to 100%)".to_string(),
-                ],
+                evidence: vec!["Max drawdown should be between 0 and 1 (0% to 100%)".to_string()],
             });
         }
 
@@ -207,9 +208,7 @@ impl CRVVerifier {
                     "Max drawdown calculation mismatch: reported {:.4} vs computed {:.4}",
                     stats.max_drawdown, computed_dd
                 ),
-                evidence: vec![
-                    format!("Difference: {:.4}", dd_diff),
-                ],
+                evidence: vec![format!("Difference: {:.4}", dd_diff)],
             });
         }
 
@@ -230,9 +229,7 @@ impl CRVVerifier {
                     rule_id: RuleId::LookaheadBias,
                     severity: Severity::Critical,
                     message: "Fill has invalid timestamp".to_string(),
-                    evidence: vec![
-                        format!("Fill #{}: timestamp = {}", i, fill.timestamp),
-                    ],
+                    evidence: vec![format!("Fill #{}: timestamp = {}", i, fill.timestamp)],
                 });
             }
         }
@@ -244,13 +241,13 @@ impl CRVVerifier {
                     rule_id: RuleId::LookaheadBias,
                     severity: Severity::Critical,
                     message: "Fills are not in chronological order".to_string(),
-                    evidence: vec![
-                        format!(
-                            "Fill #{} (t={}) occurs before Fill #{} (t={})",
-                            i, fills[i].timestamp,
-                            i - 1, fills[i - 1].timestamp
-                        ),
-                    ],
+                    evidence: vec![format!(
+                        "Fill #{} (t={}) occurs before Fill #{} (t={})",
+                        i,
+                        fills[i].timestamp,
+                        i - 1,
+                        fills[i - 1].timestamp
+                    )],
                 });
             }
         }
@@ -262,13 +259,13 @@ impl CRVVerifier {
                     rule_id: RuleId::LookaheadBias,
                     severity: Severity::Critical,
                     message: "Equity history is not in chronological order".to_string(),
-                    evidence: vec![
-                        format!(
-                            "Point #{} (t={}) occurs before Point #{} (t={})",
-                            i, equity_history[i].0,
-                            i - 1, equity_history[i - 1].0
-                        ),
-                    ],
+                    evidence: vec![format!(
+                        "Point #{} (t={}) occurs before Point #{} (t={})",
+                        i,
+                        equity_history[i].0,
+                        i - 1,
+                        equity_history[i - 1].0
+                    )],
                 });
             }
         }
@@ -311,7 +308,10 @@ impl CRVVerifier {
                         severity: Severity::Critical,
                         message: "Negative equity detected (bankruptcy)".to_string(),
                         evidence: vec![
-                            format!("Point #{}: timestamp={}, equity={:.2}", i, timestamp, equity),
+                            format!(
+                                "Point #{}: timestamp={}, equity={:.2}",
+                                i, timestamp, equity
+                            ),
                             format!("Max leverage limit: {:.2}x", max_leverage),
                         ],
                     });
@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn test_verifier_passes_valid_backtest() {
         let verifier = CRVVerifier::with_defaults();
-        
+
         // Create stats with actual drawdown in equity history
         let stats = BacktestStats {
             initial_equity: 100000.0,
@@ -378,7 +378,7 @@ mod tests {
             sharpe_ratio: 1.5,
             max_drawdown: 0.05, // 5% max drawdown
         };
-        
+
         let fills = vec![];
         let equity_history = vec![
             (1000, 100000.0),
@@ -388,7 +388,7 @@ mod tests {
         ];
 
         let report = verifier.verify(&stats, &fills, &equity_history).unwrap();
-        
+
         // Debug output if test fails
         if !report.passed {
             eprintln!("Report violations:");
@@ -396,8 +396,12 @@ mod tests {
                 eprintln!("  {:?}: {}", v.rule_id, v.message);
             }
         }
-        
-        assert!(report.passed, "Expected report to pass but got {} violations", report.violation_count());
+
+        assert!(
+            report.passed,
+            "Expected report to pass but got {} violations",
+            report.violation_count()
+        );
         assert_eq!(report.violation_count(), 0);
     }
 
@@ -405,14 +409,14 @@ mod tests {
     fn test_verifier_detects_max_drawdown_violation() {
         let mut constraints = PolicyConstraints::default();
         constraints.max_drawdown = Some(0.10); // 10% limit
-        
+
         let verifier = CRVVerifier::new(constraints);
-        
+
         let stats = BacktestStats {
             max_drawdown: 0.15, // 15% drawdown exceeds limit
             ..create_test_stats()
         };
-        
+
         let fills = vec![];
         let equity_history = vec![
             (1000, 100000.0),
@@ -422,53 +426,48 @@ mod tests {
 
         let report = verifier.verify(&stats, &fills, &equity_history).unwrap();
         assert!(!report.passed);
-        assert!(report.violations.iter().any(|v| 
-            v.rule_id == RuleId::MaxDrawdownConstraint
-        ));
+        assert!(report
+            .violations
+            .iter()
+            .any(|v| v.rule_id == RuleId::MaxDrawdownConstraint));
     }
 
     #[test]
     fn test_verifier_detects_unrealistic_sharpe() {
         let verifier = CRVVerifier::with_defaults();
-        
+
         let stats = BacktestStats {
             sharpe_ratio: 15.0, // Unrealistically high
             ..create_test_stats()
         };
-        
+
         let fills = vec![];
-        let equity_history = vec![
-            (1000, 100000.0),
-            (2000, 110000.0),
-        ];
+        let equity_history = vec![(1000, 100000.0), (2000, 110000.0)];
 
         let report = verifier.verify(&stats, &fills, &equity_history).unwrap();
         assert!(!report.passed);
-        assert!(report.violations.iter().any(|v| 
-            v.rule_id == RuleId::SharpeRatioValidation
-        ));
+        assert!(report
+            .violations
+            .iter()
+            .any(|v| v.rule_id == RuleId::SharpeRatioValidation));
     }
 
     #[test]
     fn test_verifier_detects_invalid_drawdown_bounds() {
         let verifier = CRVVerifier::with_defaults();
-        
+
         let stats = BacktestStats {
             max_drawdown: 1.5, // > 1.0 is invalid
             ..create_test_stats()
         };
-        
+
         let fills = vec![];
-        let equity_history = vec![
-            (1000, 100000.0),
-            (2000, 110000.0),
-        ];
+        let equity_history = vec![(1000, 100000.0), (2000, 110000.0)];
 
         let report = verifier.verify(&stats, &fills, &equity_history).unwrap();
         assert!(!report.passed);
-        assert!(report.violations.iter().any(|v| 
-            v.rule_id == RuleId::MaxDrawdownValidation &&
-            v.severity == Severity::Critical
+        assert!(report.violations.iter().any(
+            |v| v.rule_id == RuleId::MaxDrawdownValidation && v.severity == Severity::Critical
         ));
     }
 
@@ -476,7 +475,7 @@ mod tests {
     fn test_verifier_detects_out_of_order_fills() {
         let verifier = CRVVerifier::with_defaults();
         let stats = create_test_stats();
-        
+
         let fills = vec![
             Fill {
                 timestamp: 2000,
@@ -495,17 +494,15 @@ mod tests {
                 commission: 5.0,
             },
         ];
-        
-        let equity_history = vec![
-            (1000, 100000.0),
-            (2000, 110000.0),
-        ];
+
+        let equity_history = vec![(1000, 100000.0), (2000, 110000.0)];
 
         let report = verifier.verify(&stats, &fills, &equity_history).unwrap();
         assert!(!report.passed);
-        assert!(report.violations.iter().any(|v| 
-            v.rule_id == RuleId::LookaheadBias
-        ));
+        assert!(report
+            .violations
+            .iter()
+            .any(|v| v.rule_id == RuleId::LookaheadBias));
     }
 
     #[test]
@@ -513,7 +510,7 @@ mod tests {
         let verifier = CRVVerifier::with_defaults();
         let stats = create_test_stats();
         let fills = vec![];
-        
+
         let equity_history = vec![
             (1000, 100000.0),
             (2000, -10000.0), // Bankruptcy!
@@ -522,9 +519,8 @@ mod tests {
 
         let report = verifier.verify(&stats, &fills, &equity_history).unwrap();
         assert!(!report.passed);
-        assert!(report.violations.iter().any(|v| 
-            v.rule_id == RuleId::MaxLeverageConstraint &&
-            v.severity == Severity::Critical
+        assert!(report.violations.iter().any(
+            |v| v.rule_id == RuleId::MaxLeverageConstraint && v.severity == Severity::Critical
         ));
     }
 
@@ -533,11 +529,7 @@ mod tests {
         let verifier = CRVVerifier::with_defaults();
         let stats = create_test_stats();
         let fills = vec![];
-        let equity_history = vec![
-            (1000, 100000.0),
-            (2000, 105000.0),
-            (3000, 110000.0),
-        ];
+        let equity_history = vec![(1000, 100000.0), (2000, 105000.0), (3000, 110000.0)];
 
         let universe = UniverseMetadata {
             total_symbols: 100,
@@ -552,12 +544,14 @@ mod tests {
             traded_symbols: vec!["AAPL".to_string()],
         };
 
-        let report = verifier.verify_with_universe(&stats, &fills, &equity_history, &universe).unwrap();
+        let report = verifier
+            .verify_with_universe(&stats, &fills, &equity_history, &universe)
+            .unwrap();
         assert!(!report.passed);
-        assert!(report.violations.iter().any(|v| 
-            v.rule_id == RuleId::SurvivorshipBias &&
-            v.severity == Severity::High
-        ));
+        assert!(report
+            .violations
+            .iter()
+            .any(|v| v.rule_id == RuleId::SurvivorshipBias && v.severity == Severity::High));
     }
 
     #[test]
@@ -565,11 +559,7 @@ mod tests {
         let verifier = CRVVerifier::with_defaults();
         let stats = create_test_stats();
         let fills = vec![];
-        let equity_history = vec![
-            (1000, 100000.0),
-            (2000, 105000.0),
-            (3000, 110000.0),
-        ];
+        let equity_history = vec![(1000, 100000.0), (2000, 105000.0), (3000, 110000.0)];
 
         let universe = UniverseMetadata {
             total_symbols: 100,
@@ -577,12 +567,14 @@ mod tests {
             traded_symbols: vec!["AAPL".to_string()], // Only 1 out of 100
         };
 
-        let report = verifier.verify_with_universe(&stats, &fills, &equity_history, &universe).unwrap();
+        let report = verifier
+            .verify_with_universe(&stats, &fills, &equity_history, &universe)
+            .unwrap();
         assert!(!report.passed);
-        assert!(report.violations.iter().any(|v| 
-            v.rule_id == RuleId::SurvivorshipBias &&
-            v.severity == Severity::Medium
-        ));
+        assert!(report
+            .violations
+            .iter()
+            .any(|v| v.rule_id == RuleId::SurvivorshipBias && v.severity == Severity::Medium));
     }
 
     #[test]

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 /// A single OHLCV bar
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Bar {
-    pub timestamp: i64,  // Unix timestamp in seconds (deterministic)
+    pub timestamp: i64, // Unix timestamp in seconds (deterministic)
     pub symbol: String,
     pub open: f64,
     pub high: f64,
@@ -52,7 +52,7 @@ pub struct Fill {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Position {
     pub symbol: String,
-    pub quantity: f64,  // positive for long, negative for short
+    pub quantity: f64, // positive for long, negative for short
     pub avg_price: f64,
 }
 
@@ -84,7 +84,7 @@ pub struct Portfolio {
     pub timestamp: i64,
     pub cash: f64,
     pub positions: HashMap<String, Position>,
-    pub equity: f64,  // cash + sum of position market values
+    pub equity: f64, // cash + sum of position market values
 }
 
 impl Portfolio {

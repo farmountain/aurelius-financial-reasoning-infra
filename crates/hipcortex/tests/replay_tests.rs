@@ -39,7 +39,13 @@ fn test_replay_reproducibility() {
         },
     });
 
-    let config_hash = repo.commit(&config, "Add backtest config", vec![strategy_hash.as_hex().to_string()]).unwrap();
+    let config_hash = repo
+        .commit(
+            &config,
+            "Add backtest config",
+            vec![strategy_hash.as_hex().to_string()],
+        )
+        .unwrap();
 
     // Create a backtest result artifact
     let result = Artifact::BacktestResult(BacktestResult {
@@ -73,7 +79,11 @@ fn test_replay_reproducibility() {
 
     // Commit the result
     let result_hash = repo
-        .commit(&result, "Add backtest result", vec![config_hash.as_hex().to_string()])
+        .commit(
+            &result,
+            "Add backtest result",
+            vec![config_hash.as_hex().to_string()],
+        )
         .unwrap();
 
     // Retrieve the result and verify it's the same
@@ -217,7 +227,10 @@ fn test_full_replay_simulation() {
         .commit(
             &config,
             "Add config",
-            vec![strategy_hash.as_hex().to_string(), dataset_hash.as_hex().to_string()],
+            vec![
+                strategy_hash.as_hex().to_string(),
+                dataset_hash.as_hex().to_string(),
+            ],
         )
         .unwrap();
 
@@ -238,7 +251,11 @@ fn test_full_replay_simulation() {
     });
 
     let result_hash = repo
-        .commit(&result, "Add result", vec![config_hash.as_hex().to_string()])
+        .commit(
+            &result,
+            "Add result",
+            vec![config_hash.as_hex().to_string()],
+        )
         .unwrap();
 
     // Now verify we can replay: walk backwards from result to reconstruct inputs

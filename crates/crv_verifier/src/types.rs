@@ -63,7 +63,9 @@ impl CRVReport {
     }
 
     pub fn has_critical_violations(&self) -> bool {
-        self.violations.iter().any(|v| v.severity == Severity::Critical)
+        self.violations
+            .iter()
+            .any(|v| v.severity == Severity::Critical)
     }
 
     pub fn violation_count(&self) -> usize {
@@ -87,16 +89,16 @@ mod tests {
     #[test]
     fn test_crv_report_with_violation() {
         let mut report = CRVReport::new(12345);
-        
+
         let violation = CRVViolation {
             rule_id: RuleId::LookaheadBias,
             severity: Severity::Critical,
             message: "Strategy uses future data".to_string(),
             evidence: vec!["Line 42: accessing bar.close at t+1".to_string()],
         };
-        
+
         report.add_violation(violation);
-        
+
         assert!(!report.passed);
         assert_eq!(report.violation_count(), 1);
         assert!(report.has_critical_violations());
@@ -105,20 +107,20 @@ mod tests {
     #[test]
     fn test_crv_report_serialization() {
         let mut report = CRVReport::new(12345);
-        
+
         let violation = CRVViolation {
             rule_id: RuleId::MaxDrawdownConstraint,
             severity: Severity::High,
             message: "Max drawdown exceeded limit".to_string(),
             evidence: vec!["Observed: 0.35, Limit: 0.25".to_string()],
         };
-        
+
         report.add_violation(violation);
-        
+
         let json = serde_json::to_string_pretty(&report).unwrap();
         assert!(json.contains("max_drawdown_constraint"));
         assert!(json.contains("high"));
-        
+
         // Deserialize back
         let deserialized: CRVReport = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.timestamp, 12345);

@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use hipcortex::{Artifact, ContentHash, Repository, SearchQuery};
@@ -94,34 +96,35 @@ fn main() -> Result<()> {
             message,
             parent,
         } => {
-            let mut repo = Repository::open(&cli.repo)
-                .context("Failed to open repository")?;
+            let mut repo = Repository::open(&cli.repo).context("Failed to open repository")?;
 
             // Validate artifact path
-            let artifact = artifact.canonicalize()
+            let artifact = artifact
+                .canonicalize()
                 .context("Failed to resolve artifact path")?;
-            
+
             // Read artifact from file
-            let artifact_data = std::fs::read_to_string(&artifact)
-                .context("Failed to read artifact file")?;
-            let artifact: Artifact = serde_json::from_str(&artifact_data)
-                .context("Failed to parse artifact JSON")?;
+            let artifact_data =
+                std::fs::read_to_string(&artifact).context("Failed to read artifact file")?;
+            let artifact: Artifact =
+                serde_json::from_str(&artifact_data).context("Failed to parse artifact JSON")?;
 
             // Commit artifact
-            let hash = repo.commit(&artifact, &message, parent)
+            let hash = repo
+                .commit(&artifact, &message, parent)
                 .context("Failed to commit artifact")?;
 
             println!("Committed artifact: {}", hash);
         }
 
         Commands::Show { hash, full } => {
-            let repo = Repository::open(&cli.repo)
-                .context("Failed to open repository")?;
+            let repo = Repository::open(&cli.repo).context("Failed to open repository")?;
 
             let content_hash = ContentHash::from_hex(hash.clone());
 
             // Get metadata
-            let metadata = repo.metadata(&content_hash)
+            let metadata = repo
+                .metadata(&content_hash)
                 .context("Failed to get metadata")?;
 
             if let Some(metadata) = metadata {
@@ -142,19 +145,22 @@ fn main() -> Result<()> {
                 }
 
                 // Show commit history
-                let history = repo.history(&content_hash)
+                let history = repo
+                    .history(&content_hash)
                     .context("Failed to get history")?;
                 if !history.is_empty() {
                     println!("\nCommit History:");
                     for entry in history {
-                        println!("  - {} at {}: {}", entry.artifact_hash, entry.timestamp, entry.message);
+                        println!(
+                            "  - {} at {}: {}",
+                            entry.artifact_hash, entry.timestamp, entry.message
+                        );
                     }
                 }
 
                 if full {
                     println!("\nFull Artifact:");
-                    let artifact = repo.get(&content_hash)
-                        .context("Failed to get artifact")?;
+                    let artifact = repo.get(&content_hash).context("Failed to get artifact")?;
                     let json = serde_json::to_string_pretty(&artifact)
                         .context("Failed to serialize artifact")?;
                     println!("{}", json);
@@ -165,15 +171,16 @@ fn main() -> Result<()> {
         }
 
         Commands::Diff { hash1, hash2 } => {
-            let repo = Repository::open(&cli.repo)
-                .context("Failed to open repository")?;
+            let repo = Repository::open(&cli.repo).context("Failed to open repository")?;
 
             let content_hash1 = ContentHash::from_hex(hash1.clone());
             let content_hash2 = ContentHash::from_hex(hash2.clone());
 
-            let artifact1 = repo.get(&content_hash1)
+            let artifact1 = repo
+                .get(&content_hash1)
                 .context("Failed to get first artifact")?;
-            let artifact2 = repo.get(&content_hash2)
+            let artifact2 = repo
+                .get(&content_hash2)
                 .context("Failed to get second artifact")?;
 
             let json1 = serde_json::to_string_pretty(&artifact1)
@@ -196,18 +203,19 @@ fn main() -> Result<()> {
         }
 
         Commands::Replay { hash, data: _ } => {
-            let repo = Repository::open(&cli.repo)
-                .context("Failed to open repository")?;
+            let repo = Repository::open(&cli.repo).context("Failed to open repository")?;
 
             let content_hash = ContentHash::from_hex(hash.clone());
-            let artifact = repo.get(&content_hash)
-                .context("Failed to get artifact")?;
+            let artifact = repo.get(&content_hash).context("Failed to get artifact")?;
 
             match artifact {
                 Artifact::BacktestResult(result) => {
                     println!("Replaying backtest result: {}", hash);
                     println!("Original config hash: {}", result.config_hash);
-                    println!("Original execution timestamp: {}", result.execution_timestamp);
+                    println!(
+                        "Original execution timestamp: {}",
+                        result.execution_timestamp
+                    );
                     println!("Original stats:");
                     println!("  Final equity: {:.2}", result.stats.final_equity);
                     println!("  Total return: {:.2}%", result.stats.total_return * 100.0);
@@ -216,7 +224,8 @@ fn main() -> Result<()> {
 
                     // Get the config
                     let config_hash = ContentHash::from_hex(result.config_hash.clone());
-                    let config_artifact = repo.get(&config_hash)
+                    let config_artifact = repo
+                        .get(&config_hash)
                         .context("Failed to get config artifact")?;
 
                     match config_artifact {
@@ -237,14 +246,18 @@ fn main() -> Result<()> {
                             println!("  ✓ Configuration retrieved successfully");
                             println!("  ✓ Strategy hash: {}", config.strategy_hash);
                             println!("  ✓ Dataset hash: {}", config.dataset_hash);
-                            println!("\nNote: Full replay requires integration with backtest engine.");
-                            println!("This command demonstrates hash-based reproducibility tracking.");
+                            println!(
+                                "\nNote: Full replay requires integration with backtest engine."
+                            );
+                            println!(
+                                "This command demonstrates hash-based reproducibility tracking."
+                            );
 
                             // Compute hash of the original result
                             let result_artifact = Artifact::BacktestResult(result.clone());
                             let computed_hash = hipcortex::ContentHash::compute(&result_artifact)
                                 .context("Failed to compute hash")?;
-                            
+
                             if computed_hash.as_hex() == hash {
                                 println!("\n✓ Result hash verification PASSED");
                                 println!("  Original hash matches recomputed hash");
@@ -272,8 +285,7 @@ fn main() -> Result<()> {
             policy,
             limit,
         } => {
-            let repo = Repository::open(&cli.repo)
-                .context("Failed to open repository")?;
+            let repo = Repository::open(&cli.repo).context("Failed to open repository")?;
 
             let query = SearchQuery {
                 artifact_type,
@@ -285,8 +297,7 @@ fn main() -> Result<()> {
                 limit: Some(limit),
             };
 
-            let results = repo.search(&query)
-                .context("Failed to search artifacts")?;
+            let results = repo.search(&query).context("Failed to search artifacts")?;
 
             if results.is_empty() {
                 println!("No artifacts found matching the query");

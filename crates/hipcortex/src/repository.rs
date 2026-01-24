@@ -18,14 +18,13 @@ impl Repository {
     /// Create or open a HipCortex repository at the given path
     pub fn open<P: AsRef<Path>>(root: P) -> Result<Self> {
         let root = root.as_ref().to_path_buf();
-        std::fs::create_dir_all(&root)
-            .context("Failed to create repository directory")?;
+        std::fs::create_dir_all(&root).context("Failed to create repository directory")?;
 
         let store = ContentStore::new(root.join("objects"))
             .context("Failed to initialize content store")?;
 
-        let audit_log = AuditLog::new(root.join("audit.log"))
-            .context("Failed to initialize audit log")?;
+        let audit_log =
+            AuditLog::new(root.join("audit.log")).context("Failed to initialize audit log")?;
 
         let index = MetadataIndex::new(root.join("index.db"))
             .context("Failed to initialize metadata index")?;
@@ -46,7 +45,9 @@ impl Repository {
         parent_hashes: Vec<String>,
     ) -> Result<ContentHash> {
         // Store artifact
-        let hash = self.store.store(artifact)
+        let hash = self
+            .store
+            .store(artifact)
             .context("Failed to store artifact")?;
 
         // Get current timestamp
@@ -62,12 +63,14 @@ impl Repository {
         };
 
         // Append to audit log
-        self.audit_log.append(&entry)
+        self.audit_log
+            .append(&entry)
             .context("Failed to append to audit log")?;
 
         // Extract and index metadata
         let metadata = self.extract_metadata(artifact, &hash, timestamp);
-        self.index.index(&metadata)
+        self.index
+            .index(&metadata)
             .context("Failed to index artifact metadata")?;
 
         Ok(hash)
@@ -175,7 +178,7 @@ impl Repository {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::artifact::{StrategySpec, Dataset, DatasetMetadata};
+    use crate::artifact::{Dataset, DatasetMetadata, StrategySpec};
     use tempfile::TempDir;
 
     #[test]
@@ -195,7 +198,7 @@ mod tests {
         let hash = repo.commit(&artifact, "Initial commit", vec![]).unwrap();
 
         let retrieved = repo.get(&hash).unwrap();
-        
+
         // Verify properties match
         match (&artifact, &retrieved) {
             (Artifact::StrategySpec(a), Artifact::StrategySpec(b)) => {
@@ -253,8 +256,10 @@ mod tests {
             regime_tags: vec!["ranging".to_string()],
         });
 
-        repo.commit(&artifact1, "Add momentum strategy", vec![]).unwrap();
-        repo.commit(&artifact2, "Add mean reversion strategy", vec![]).unwrap();
+        repo.commit(&artifact1, "Add momentum strategy", vec![])
+            .unwrap();
+        repo.commit(&artifact2, "Add mean reversion strategy", vec![])
+            .unwrap();
 
         let query = SearchQuery {
             goal: Some("momentum".to_string()),
@@ -284,7 +289,7 @@ mod tests {
 
         let metadata = repo.metadata(&hash).unwrap();
         assert!(metadata.is_some());
-        
+
         let metadata = metadata.unwrap();
         assert_eq!(metadata.goal, Some("momentum".to_string()));
         assert_eq!(metadata.regime_tags, vec!["trending".to_string()]);
