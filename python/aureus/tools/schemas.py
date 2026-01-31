@@ -20,13 +20,18 @@ class ToolType(str, Enum):
 
 
 class StrategyConfig(BaseModel):
-    """Strategy configuration schema."""
+    """Strategy configuration schema.
     
-    type: str = Field(..., description="Strategy type (e.g., 'ts_momentum')")
-    symbol: str = Field(..., description="Trading symbol")
-    lookback: int = Field(20, ge=1, description="Lookback period")
-    vol_target: float = Field(0.15, gt=0, le=1, description="Volatility target")
-    vol_lookback: int = Field(20, ge=1, description="Volatility lookback period")
+    Allows extra fields to support different strategy types with varying parameters.
+    """
+    
+    model_config = ConfigDict(extra='allow')
+    
+    type: str = Field(..., description="Strategy type (e.g., 'ts_momentum', 'mean_reversion', 'breakout')")
+    symbol: str = Field(default="AAPL", description="Trading symbol")
+    lookback: Optional[int] = Field(default=20, ge=1, description="Lookback period")
+    vol_target: Optional[float] = Field(default=0.15, gt=0, le=1, description="Volatility target")
+    vol_lookback: Optional[int] = Field(default=20, ge=1, description="Volatility lookback period")
 
 
 class CostModelConfig(BaseModel):

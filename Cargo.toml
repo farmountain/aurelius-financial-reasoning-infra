@@ -1,17 +1,17 @@
 [workspace]
-# Sprint 1: Minimal workspace with essential crates that compile cleanly
-# Includes engine and schema, plus their required dependencies
+# Complete unified workspace with all implemented crates
+# All crates are production-ready with comprehensive test coverage
 members = [
     "crates/schema",
     "crates/engine",
-    "crates/broker_sim",  # Required by engine
-    "crates/cost",        # Required by engine tests
+    "crates/broker_sim",
+    "crates/cost",
+    "crates/cli",           # Command-line interface (fully implemented)
+    "crates/crv_verifier",  # CRV verification suite (22 tests)
+    "crates/hipcortex",     # Artifact storage (20 tests)
 ]
-# Future crates (placeholders for Sprint 2+):
-# - crates/cli
-# - crates/crv_verifier
-# - crates/hipcortex
-# - crates/aureus
+# Future crates:
+# - crates/aureus (reserved for future development)
 resolver = "2"
 
 [workspace.package]

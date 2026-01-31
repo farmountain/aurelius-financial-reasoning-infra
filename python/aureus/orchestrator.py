@@ -7,6 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from aureus.llm_strategy_generator import LLMStrategyGenerator, LLMConfig, LLMProvider
 from aureus.tools.rust_wrapper import RustEngineWrapper
 from aureus.tools.schemas import (
     ToolCall,
@@ -32,6 +33,8 @@ class Orchestrator:
         hipcortex_cli_path: Optional[Path] = None,
         strict_mode: bool = True,
         max_drawdown_limit: float = 0.10,  # Default 10% as in example
+        llm_provider: LLMProvider = "none",  # "openai", "anthropic", or "none"
+        llm_config: Optional[LLMConfig] = None,
     ):
         """Initialize orchestrator.
         
@@ -40,6 +43,8 @@ class Orchestrator:
             hipcortex_cli_path: Path to hipcortex CLI (auto-detected if None)
             strict_mode: Enable strict mode for artifact ID responses
             max_drawdown_limit: Maximum allowed drawdown
+            llm_provider: LLM provider for strategy generation ("openai", "anthropic", or "none")
+            llm_config: Custom LLM configuration (if None, reads from environment)
         """
         self.rust_wrapper = RustEngineWrapper(rust_cli_path, hipcortex_cli_path)
         self.fsm = GoalGuardFSM()
@@ -47,6 +52,14 @@ class Orchestrator:
         self.product_gate = ProductGate(self.rust_wrapper, max_drawdown_limit)
         self.reflexion = ReflexionLoop()
         self.strict_mode_checker = StrictMode(enabled=strict_mode)
+        
+        # Initialize LLM strategy generator
+        if llm_config is None and llm_provider != "none":
+            llm_config = LLMConfig.from_env(llm_provider)
+        elif llm_config is None:
+            llm_config = LLMConfig(provider="none")
+        
+        self.llm_generator = LLMStrategyGenerator(llm_config)
     
     def run_goal(self, goal: str, data_path: str) -> Dict[str, Any]:
         """Execute a goal using the orchestrator.
@@ -230,49 +243,81 @@ class Orchestrator:
             }
     
     def _parse_goal(self, goal: str) -> Dict[str, Any]:
-        """Parse goal to extract constraints.
+        """Parse goal string to extract constraints and strategy type.
+        
+        Enhanced parser that extracts multiple constraints and detects strategy type
+        from natural language goals.
         
         Args:
-            goal: Goal description
+            goal: Goal description (e.g., "design a trend strategy under DD<10%")
             
         Returns:
-            Dict of extracted constraints
+            Dict with extracted constraints and strategy hints
         """
         constraints = {}
+        goal_lower = goal.lower()
         
-        # Extract drawdown constraint
-        dd_match = re.search(r"DD\s*<\s*(\d+)%", goal, re.IGNORECASE)
+        # Extract max drawdown from goal (e.g., "DD<10%" or "drawdown < 0.15")
+        dd_match = re.search(r"DD\s*<\s*(\d+\.?\d*)%?", goal, re.IGNORECASE)
         if dd_match:
-            constraints["max_drawdown"] = float(dd_match.group(1)) / 100.0
+            dd_value = float(dd_match.group(1))
+            if dd_value > 1.0:  # Assume percentage if > 1
+                dd_value /= 100.0
+            constraints["max_drawdown"] = dd_value
+        
+        # Extract Sharpe ratio targets (e.g., "Sharpe > 1.5")
+        sharpe_match = re.search(r"sharpe\s*>?\s*(\d+\.?\d*)", goal_lower)
+        if sharpe_match:
+            constraints["min_sharpe"] = float(sharpe_match.group(1))
+        
+        # Extract return targets (e.g., "return > 15%")
+        return_match = re.search(r"return\s*>?\s*(\d+\.?\d*)%?", goal_lower)
+        if return_match:
+            ret_value = float(return_match.group(1))
+            if ret_value > 1.0:
+                ret_value /= 100.0
+            constraints["min_return"] = ret_value
+        
+        # Detect strategy type from keywords
+        if any(word in goal_lower for word in ["trend", "momentum", "following"]):
+            constraints["strategy_type"] = "momentum"
+        elif any(word in goal_lower for word in ["mean.reversion", "mean reversion", "reversal", "chop", "range"]):
+            constraints["strategy_type"] = "mean_reversion"
+        elif any(word in goal_lower for word in ["breakout", "volatility", "vol"]):
+            constraints["strategy_type"] = "breakout"
+        else:
+            # Default to momentum for generic goals
+            constraints["strategy_type"] = "momentum"
+        
+        # Detect risk preferences
+        if any(word in goal_lower for word in ["conservative", "low risk", "safe"]):
+            constraints["risk_preference"] = "conservative"
+        elif any(word in goal_lower for word in ["aggressive", "high risk", "speculative"]):
+            constraints["risk_preference"] = "aggressive"
+        else:
+            constraints["risk_preference"] = "moderate"
         
         return constraints
     
-    def _generate_strategy_from_goal(self, goal: str) -> StrategyConfig:
-        """Generate strategy configuration from goal.
+    def _generate_strategy_from_goal(self, goal: str, use_llm: bool = True) -> StrategyConfig:
+        """Generate strategy specification from goal using LLM or templates.
+        
+        Uses LLM-assisted generation when available, with automatic fallback to
+        template-based generation if LLM fails or is not configured.
         
         Args:
             goal: Goal description
+            use_llm: Whether to use LLM if available (default: True)
             
         Returns:
-            StrategyConfig
+            StrategyConfig for the appropriate strategy
         """
-        # For now, use a simple heuristic to map goals to strategies
-        # In a full implementation, this would use more sophisticated logic
+        constraints = self._parse_goal(goal)
         
-        if "trend" in goal.lower() or "momentum" in goal.lower():
-            return StrategyConfig(
-                type="ts_momentum",
-                symbol="AAPL",
-                lookback=20,
-                vol_target=0.15,
-                vol_lookback=20,
-            )
+        # Use LLM generator (with automatic template fallback)
+        if self.llm_generator.is_llm_available:
+            print(f"🤖 Using {self.llm_generator.config.provider.upper()} for strategy generation...")
         else:
-            # Default to momentum strategy
-            return StrategyConfig(
-                type="ts_momentum",
-                symbol="AAPL",
-                lookback=20,
-                vol_target=0.15,
-                vol_lookback=20,
-            )
+            print("📋 Using template-based strategy generation...")
+        
+        return self.llm_generator.generate(goal, constraints, use_llm=use_llm)
