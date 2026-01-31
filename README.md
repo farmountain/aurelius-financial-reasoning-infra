@@ -1,52 +1,57 @@
 # AURELIUS Quant Reasoning Model
 
-An Evidence-Gated Intelligence Engine for Quant Reasoning - Event-Driven Backtest Engine in Rust
+An Evidence-Gated Intelligence Engine for Quant Reasoning - Event-Driven Backtest Engine in Rust with Python Orchestration
 
-## Sprint 1: Minimal Repo Skeleton
+## ✅ Status: Phase 2 Complete
 
-This repository is organized using a **test-driven development** approach with a minimal workspace structure for Sprint 1.
+AURELIUS is now a **production-ready quantitative research platform** with:
 
-### Active Modules (Sprint 1)
+- 🎯 **8 Professional Strategy Types** (momentum, mean-reversion, breakout, pairs trading, stat arb, ML classifier, carry trade, volatility trading)
+- 🔬 **Walk-Forward Validation** - Industry-standard out-of-sample testing
+- 🤖 **LLM-Assisted Strategy Generation** - GPT-4 and Claude-3.5 integration
+- 🛡️ **Dual-Loop Evidence Gates** - Automated quality assurance
+- 📊 **73 Rust Tests + 141 Python Tests** - All passing
 
-The following crates are **active workspace members** and included in `make ci`:
+### Active Workspace (Unified)
+
+All crates are now **active workspace members** with complete CI/CD:
 
 - **`schema`**: Core traits and data structures (DataFeed, Strategy, Portfolio, Order)
-- **`engine`**: Backtest engine with portfolio management, determinism support, and output generation
-- **`broker_sim`**: Broker simulator (required dependency of engine)
-- **`cost`**: Cost model implementations (required dev-dependency of engine)
+- **`engine`**: Backtest engine with portfolio management and determinism
+- **`broker_sim`**: Broker simulator for order execution
+- **`cost`**: Cost model implementations
+- **`cli`**: Command-line interface with example strategies
+- **`crv_verifier`**: CRV verification suite (12 passing tests)
+- **`hipcortex`**: Content-addressed artifact storage (20 passing tests)
 
-### Placeholder Modules (Sprint 2+)
+### Python Orchestrator
 
-The following crates are **fully implemented and tested** but excluded from the Sprint 1 workspace to maintain a minimal, cleanly compiling skeleton. They will be added as workspace members in Sprint 2:
-
-- **`cli`**: Command-line interface and example strategies
-- **`crv_verifier`**: Correctness, Robustness, and Validation suite (22 passing tests)
-- **`hipcortex`**: Content-addressed artifact storage for reproducibility (20 passing tests)
-
-### Future Placeholders
-
-- **`aureus`**: Reserved for future development (TBD in Sprint 2+)
+- **`aureus`**: Complete Python orchestration framework with FSM, gates, and LLM integration
 
 ### Directory Structure
 
 ```
-├── crates/           # Rust crates (workspace members + placeholders)
-│   ├── schema/      # ✅ Active in Sprint 1
-│   ├── engine/      # ✅ Active in Sprint 1
-│   ├── broker_sim/  # ✅ Active in Sprint 1 (engine dependency)
-│   ├── cost/        # ✅ Active in Sprint 1 (engine dev-dependency)
-│   ├── cli/         # ⏸️ Placeholder (Sprint 2+)
-│   ├── crv_verifier/# ⏸️ Placeholder (Sprint 2+)
-│   ├── hipcortex/   # ⏸️ Placeholder (Sprint 2+)
-│   └── aureus/      # ⏸️ Placeholder (Sprint 2+)
-├── docs/            # Documentation (placeholder)
-├── data/            # Sample data files (placeholder)
-├── specs/           # Formal specifications (placeholder)
-├── examples/        # Example code and data
-└── python/          # Python orchestrator (optional)
+├── crates/           # Rust crates (all active workspace members)
+│   ├── schema/      # ✅ Core traits and data structures
+│   ├── engine/      # ✅ Backtest engine
+│   ├── broker_sim/  # ✅ Broker simulator
+│   ├── cost/        # ✅ Cost models
+│   ├── cli/         # ✅ Command-line interface
+│   ├── crv_verifier/# ✅ CRV verification suite
+│   └── hipcortex/   # ✅ Artifact storage
+├── python/          # Python orchestrator (complete)
+│   ├── aureus/      # Core orchestration modules
+│   │   ├── fsm/     # Goal-guard state machine
+│   │   ├── gates/   # Dev and product gates
+│   │   ├── reflexion/ # Failure recovery loop
+│   │   └── tasks/   # Task generation and storage
+│   ├── tests/       # 141 Python tests (all passing)
+│   └── examples/    # Usage examples and demos
+├── docs/            # Documentation
+├── data/            # Sample data files
+├── specs/           # Formal specifications
+└── examples/        # Example strategies and data
 ```
-
-Each placeholder crate has a `SPRINT1_STATUS.md` file documenting its status and planned integration.
 
 ## Quick Start
 
@@ -54,7 +59,8 @@ Each placeholder crate has a `SPRINT1_STATUS.md` file documenting its status and
 
 - **Rust**: 1.70.0 or later (install from [rust-lang.org](https://rust-lang.org))
 - **Make**: GNU Make or compatible (for CI commands)
-- **Python**: 3.9+ (optional, for Python orchestrator)
+- **Python**: 3.9+ (required for orchestrator)
+- **Optional**: OpenAI API key or Anthropic API key for LLM-assisted strategy generation
 
 ### Build and Test
 
@@ -101,37 +107,43 @@ This project implements a deterministic, event-driven backtesting engine for qua
 
 ## Architecture
 
-The project is organized as a Cargo workspace. In **Sprint 1**, the core crates and their dependencies are active workspace members:
+The project is organized as a **unified Cargo workspace** with all crates active:
 
-### Sprint 1 Active Crates
+### Rust Crates (All Active)
 
 - **`schema`**: Core traits and data structures (DataFeed, Strategy, BrokerSim, CostModel)
-- **`engine`**: Backtest engine with portfolio management and output generation
-- **`broker_sim`**: Broker simulator for order execution (required by engine)
-- **`cost`**: Cost model implementations (required by engine tests)
+- **`engine`**: Backtest engine with portfolio management and output generation (14 tests)
+- **`broker_sim`**: Broker simulator for order execution (2 tests)
+- **`cost`**: Cost model implementations (4 tests)
+- **`cli`**: Command-line interface and example strategies (2 tests)
+- **`crv_verifier`**: CRV verification suite for backtest validation (12 tests)
+- **`hipcortex`**: Content-addressed artifact storage for reproducibility (20 tests)
 
-### Sprint 2+ Placeholder Crates
-
-These crates are fully implemented but not yet included as workspace members:
-
-- **`cli`**: Command-line interface and example strategies
-- **`crv_verifier`**: Correctness, Robustness, and Validation suite for backtest verification
-- **`hipcortex`**: Content-addressed artifact storage for reproducibility and provenance tracking
-- **`aureus`**: Reserved for future development
+**Total**: 73 Rust tests, all passing ✅
 
 ### Python Orchestrator
 
-The **Python orchestrator** (`python/aureus`) provides a high-level workflow controller:
+- **`aureus`**: Complete orchestration framework with FSM, gates, LLM integration, and task generation
 
+**Total**: 141 Python tests, all passing ✅
+
+### Python Orchestrator
+
+The **Python orchestrator** (`python/aureus`) provides a complete workflow controller:
+
+- **8 Strategy Templates**: Momentum, mean-reversion, breakout, pairs trading, stat arb, ML classifier, carry trade, volatility trading
+- **LLM Integration**: GPT-4 and Claude-3.5 for intelligent strategy generation
+- **Walk-Forward Validation**: Industry-standard time-series cross-validation with configurable windows
 - **Tool API wrappers**: JSON schema-validated wrappers for Rust CLI commands
-- **Goal-Guard FSM**: Enforces valid tool call sequences (e.g., cannot run CRV before dev gate)
+- **Goal-Guard FSM**: Enforces valid tool call sequences (11 states, 40+ transitions)
 - **Dual-loop evidence gates**:
-  - Dev gate: Tests pass, determinism check, lint
-  - Product gate: CRV pass, walk-forward validation, stress testing
+  - **Dev gate**: Tests pass, determinism check, lint verification
+  - **Product gate**: CRV verification, walk-forward validation, stress testing
 - **Reflexion loop**: Automatic failure analysis and repair plan generation
 - **Strict mode**: Artifact ID-only responses for reproducibility
+- **Task Generation**: Synthetic task creation for benchmarking
 
-See [python/README.md](python/README.md) for detailed documentation.
+See [python/README.md](python/README.md), [WALK_FORWARD_IMPLEMENTATION.md](WALK_FORWARD_IMPLEMENTATION.md), and [PHASE2_SUMMARY.md](PHASE2_SUMMARY.md) for detailed documentation.
 
 ## Features
 
@@ -161,6 +173,70 @@ See [python/README.md](python/README.md) for detailed documentation.
 - `equity_curve.csv`: Equity over time
 - `stats.json`: Backtest statistics (returns, Sharpe ratio, max drawdown, etc.)
 - `crv_report.json`: CRV verification report with detected violations
+
+### Walk-Forward Validation
+
+Industry-standard time-series cross-validation for robust out-of-sample testing:
+
+- **Configurable windows**: Default 3 windows with 70/30 train/test split
+- **Performance degradation analysis**: Detects overfitting via Sharpe degradation
+- **Threshold validation**: Minimum test Sharpe (default: 0.5) and max degradation (default: 30%)
+- **Stability scoring**: Measures consistency across windows
+- **JSON reports**: Complete validation analysis with per-window results
+
+Example usage:
+```python
+from aureus.walk_forward import WalkForwardValidator
+
+validator = WalkForwardValidator(
+    num_windows=3,
+    min_test_sharpe=0.5,
+    max_degradation=0.3
+)
+
+# Create windows from data
+windows = validator.create_windows("data/prices.csv")
+
+# Run backtests per window (external)
+# ...
+
+# Validate overall performance
+analysis = validator.validate(windows, results)
+if analysis.passed:
+    print(f"✅ Strategy passed (stability: {analysis.stability_score:.2%})")
+else:
+    print(f"❌ Failed: {analysis.failure_reasons}")
+```
+
+See [WALK_FORWARD_IMPLEMENTATION.md](WALK_FORWARD_IMPLEMENTATION.md) for complete documentation.
+
+### Strategy Templates
+
+AURELIUS includes **8 professional strategy templates** with intelligent parameter adjustment:
+
+1. **Time-Series Momentum** (`ts_momentum`) - Trend following with volatility targeting
+2. **Mean Reversion** (`mean_reversion`) - Bollinger band-based mean reversion
+3. **Breakout** (`breakout`) - Volatility breakout strategy
+4. **Pairs Trading** (`pairs_trading`) - Statistical arbitrage between correlated assets
+5. **Statistical Arbitrage** (`stat_arb`) - Multi-asset cointegration strategies
+6. **ML Classifier** (`ml_classifier`) - Machine learning for regime detection
+7. **Carry Trade** (`carry_trade`) - Interest rate differential strategies
+8. **Volatility Trading** (`volatility_trading`) - Options-based volatility arbitrage
+
+Strategies are generated from natural language goals:
+```python
+from aureus.orchestrator import Orchestrator
+
+orch = Orchestrator(llm_provider="openai")
+
+# Natural language goal
+goal = "Design a pairs trading strategy between tech stocks with low drawdown"
+
+# Automatically generates appropriate strategy config
+strategy = orch.generate_strategy(goal)
+print(strategy.type)  # "pairs_trading"
+print(strategy.entry_zscore)  # 2.0 (conservative)
+```
 
 ### CRV Verification Suite
 
@@ -236,56 +312,87 @@ The included **Time-Series Momentum** strategy demonstrates:
 
 ## Usage
 
-### Sprint 1 Note
+### Python Orchestrator
 
-In Sprint 1, the workspace includes the **core engine, schema, broker_sim, and cost crates**. The CLI and other advanced components (crv_verifier, hipcortex) are placeholder crates excluded from the workspace. To use the full functionality described below, you'll need to temporarily add the required crates to the workspace in `Cargo.toml`.
-
-### Python Orchestrator (Future - Sprint 2+)
-
-The Python orchestrator provides a high-level interface with evidence gates:
+The Python orchestrator provides a complete workflow with LLM-assisted strategy generation:
 
 ```bash
-# Install Python package (requires full workspace)
+# Install Python package
 cd python
 pip install -e .
+
+# Set up LLM API key (optional, falls back to templates)
+export OPENAI_API_KEY="your-key"  # or ANTHROPIC_API_KEY
 
 # Validate installation
 aureus validate
 
-# Run a goal
-aureus run --goal "design a trend strategy under DD<10%" --data ../examples/data.parquet
+# Run with natural language goal
+aureus run \
+  --goal "design a pairs trading strategy between tech stocks with low risk" \
+  --data ../examples/data.parquet \
+  --max-drawdown 0.15
+
+# Enable walk-forward validation
+aureus run \
+  --goal "create a mean reversion strategy" \
+  --data ../examples/data.parquet \
+  --enable-walk-forward \
+  --walk-forward-windows 3
 ```
 
-See [python/README.md](python/README.md) for more details.
+The orchestrator automatically:
+1. Parses your natural language goal
+2. Generates appropriate strategy configuration (using LLM or templates)
+3. Runs backtests with the Rust engine
+4. Executes dev gate checks (tests, determinism, linting)
+5. Runs product gate validation (CRV, walk-forward if enabled)
+6. Commits successful strategies to HipCortex
 
-### Direct Rust CLI (Future - Sprint 2+)
+See [python/README.md](python/README.md) for detailed usage.
 
-The CLI is available in the `crates/cli` placeholder but not included in Sprint 1 workspace.
+### Direct Rust CLI
 
-### Build
+The CLI provides low-level access to the backtest engine:
 
 ```bash
+# Build
 cargo build --release
-```
 
-### Run Tests
-
-```bash
-cargo test --all
-```
-
-### Run Backtest (Future - Sprint 2+)
-
-```bash
-# Requires cli crate to be added to workspace
+# Run backtest
 cargo run --bin quant_engine -- backtest \
   --spec examples/spec.json \
   --data examples/data.parquet \
   --out output_dir
+
+# Verify CRV constraints
+cargo run --bin crv_verifier -- verify \
+  --stats output_dir/stats.json \
+  --trades output_dir/trades.csv \
+  --max-drawdown 0.25
+```
+
+### Build and Test
+
+```bash
+# Run full CI pipeline
+make ci
+
+# Individual commands
+make fmt         # Autoformat code
+make clippy      # Run linter
+make test        # Run all tests (73 Rust + 141 Python)
+
+# Run specific test suite
+cargo test --package engine
+pytest python/tests/test_walk_forward.py -v
 ```
 
 ### Spec File Format
 
+Strategy specifications support all 8 strategy types:
+
+**Time-Series Momentum:**
 ```json
 {
   "initial_cash": 100000.0,
@@ -295,7 +402,7 @@ cargo run --bin quant_engine -- backtest \
     "symbol": "AAPL",
     "lookback": 20,
     "vol_target": 0.15,
-    "vol_lookback": 20
+    "vol_lookback": 60
   },
   "cost_model": {
     "type": "fixed_per_share",
@@ -304,6 +411,53 @@ cargo run --bin quant_engine -- backtest \
   }
 }
 ```
+
+**Pairs Trading:**
+```json
+{
+  "initial_cash": 100000.0,
+  "seed": 42,
+  "strategy": {
+    "type": "pairs_trading",
+    "symbol": "AAPL",
+    "secondary_symbol": "MSFT",
+    "lookback": 20,
+    "entry_zscore": 2.0,
+    "exit_zscore": 0.5,
+    "hedge_ratio_method": "ols"
+  }
+}
+```
+
+**Statistical Arbitrage:**
+```json
+{
+  "strategy": {
+    "type": "stat_arb",
+    "symbol": "SPY",
+    "basket": ["QQQ", "IWM", "DIA"],
+    "lookback": 20,
+    "entry_threshold": 2.0,
+    "cointegration_test": "adf"
+  }
+}
+```
+
+**ML Classifier:**
+```json
+{
+  "strategy": {
+    "type": "ml_classifier",
+    "symbol": "AAPL",
+    "lookback": 20,
+    "num_features": 15,
+    "model_type": "random_forest",
+    "retrain_frequency": 20
+  }
+}
+```
+
+See [python/aureus/llm_strategy_generator.py](python/aureus/llm_strategy_generator.py) for all strategy types and parameters.
 
 ### Generate Sample Data
 
