@@ -67,11 +67,26 @@ Available strategy types:
 3. breakout - Volatility breakout strategy
    Parameters: lookback (int), breakout_threshold (float), atr_period (int)
 
+4. pairs_trading - Statistical arbitrage between correlated assets
+   Parameters: lookback (int), entry_zscore (float), exit_zscore (float), hedge_ratio_method (str)
+
+5. stat_arb - Multi-asset statistical arbitrage with cointegration
+   Parameters: lookback (int), num_assets (int), entry_threshold (float), exit_threshold (float)
+
+6. ml_classifier - Machine learning classifier for regime detection
+   Parameters: lookback (int), num_features (int), model_type (str), retrain_frequency (int)
+
+7. carry_trade - Interest rate differential strategy
+   Parameters: lookback (int), min_carry (float), vol_target (float)
+
+8. volatility_trading - Vol arbitrage strategy
+   Parameters: lookback (int), target_delta (float), rebalance_frequency (int)
+
 Constraints detected: {constraints}
 
 Return ONLY a JSON object with this exact structure:
 {{
-    "type": "ts_momentum" | "mean_reversion" | "breakout",
+    "type": "ts_momentum" | "mean_reversion" | "breakout" | "pairs_trading" | "stat_arb" | "ml_classifier" | "carry_trade" | "volatility_trading",
     "symbol": "AAPL",
     "reasoning": "Brief explanation of why this strategy fits the goal",
     "parameters": {{
@@ -301,16 +316,37 @@ Return only the JSON, no additional text."""
         strategy_type = constraints.get("strategy_type", "momentum")
         risk_preference = constraints.get("risk_preference", "moderate")
         
+        # Parse goal text for strategy hints if strategy_type not in constraints
+        goal_lower = goal.lower()
+        if strategy_type == "momentum":  # Default value, check goal text
+            if "pairs" in goal_lower or "pair trading" in goal_lower:
+                strategy_type = "pairs_trading"
+            elif "statistical" in goal_lower or "arbitrage" in goal_lower or "stat arb" in goal_lower:
+                strategy_type = "stat_arb"
+            elif "machine learning" in goal_lower or " ml " in goal_lower or "classifier" in goal_lower:
+                strategy_type = "ml_classifier"
+            elif "carry" in goal_lower or "interest" in goal_lower:
+                strategy_type = "carry_trade"
+            elif "volatility" in goal_lower or " vol " in goal_lower or "options" in goal_lower:
+                strategy_type = "volatility_trading"
+            elif "mean reversion" in goal_lower or "reverting" in goal_lower:
+                strategy_type = "mean_reversion"
+            elif "breakout" in goal_lower:
+                strategy_type = "breakout"
+        
         # Adjust parameters based on risk preference
         if risk_preference == "conservative":
             vol_target = 0.10
             lookback = 40
+            aggressive_multiplier = 0.7
         elif risk_preference == "aggressive":
             vol_target = 0.25
             lookback = 10
+            aggressive_multiplier = 1.5
         else:
             vol_target = 0.15
             lookback = 20
+            aggressive_multiplier = 1.0
         
         # Generate based on strategy type
         if strategy_type == "momentum":
@@ -337,7 +373,69 @@ Return only the JSON, no additional text."""
                 breakout_threshold=2.0 if risk_preference == "conservative" else 1.5,
                 atr_period=14,
             )
+        elif strategy_type == "pairs_trading":
+            # Pairs trading strategy
+            return StrategyConfig(
+                type="pairs_trading",
+                symbol="AAPL",  # Primary asset
+                secondary_symbol="MSFT",  # Pair asset
+                lookback=lookback,
+                entry_zscore=2.0 * aggressive_multiplier,
+                exit_zscore=0.5,
+                hedge_ratio_method="ols",  # Ordinary Least Squares
+                rolling_window=lookback * 2,
+            )
+        elif strategy_type == "stat_arb":
+            # Statistical arbitrage with cointegration
+            return StrategyConfig(
+                type="stat_arb",
+                symbol="SPY",  # Lead asset
+                basket=["QQQ", "IWM", "DIA"],  # Cointegrated basket
+                lookback=lookback,
+                num_assets=4,
+                entry_threshold=2.0 * aggressive_multiplier,
+                exit_threshold=0.5,
+                cointegration_test="adf",  # Augmented Dickey-Fuller
+                hedge_ratio_method="johansen",
+            )
+        elif strategy_type == "ml_classifier":
+            # ML-based regime detection
+            return StrategyConfig(
+                type="ml_classifier",
+                symbol="AAPL",
+                lookback=lookback,
+                num_features=int(15 * aggressive_multiplier),
+                model_type="random_forest",  # or "xgboost", "logistic_regression"
+                retrain_frequency=20,  # Retrain every 20 days
+                feature_set="technical",  # or "fundamental", "mixed"
+                target_variable="forward_return",
+                classification_threshold=0.02,  # 2% forward return threshold
+            )
+        elif strategy_type == "carry_trade":
+            # Carry trade strategy
+            return StrategyConfig(
+                type="carry_trade",
+                symbol="FX_EURUSD",  # Currency pair
+                lookback=lookback,
+                min_carry=0.02,  # Minimum 2% annual carry
+                vol_target=vol_target,
+                vol_lookback=lookback * 3,
+                rebalance_frequency=5,  # Days
+            )
+        elif strategy_type == "volatility_trading":
+            # Volatility trading strategy
+            return StrategyConfig(
+                type="volatility_trading",
+                symbol="SPY",  # Underlying
+                options_chain="SPY_OPTIONS",  # Options data
+                lookback=lookback,
+                target_delta=0.25 * aggressive_multiplier,  # Delta target
+                rebalance_frequency=1,  # Daily rebalancing
+                vol_forecast_method="ewma",  # or "garch", "realized"
+                hedge_type="delta",  # or "gamma", "vega"
+            )
         else:
+            # Default to momentum
             return StrategyConfig(
                 type="ts_momentum",
                 symbol="AAPL",
