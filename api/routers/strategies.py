@@ -1,8 +1,9 @@
 """Strategy management router."""
 import uuid
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional
+from sqlalchemy.orm import Session
 import sys
 import os
 
@@ -26,11 +27,10 @@ from schemas.strategy import (
     StrategyListResponse,
     StrategyDetailResponse,
 )
+from database.session import get_db
+from database.crud import StrategyDB
 
 router = APIRouter(prefix="/api/v1/strategies", tags=["strategies"])
-
-# In-memory storage for demo (replace with database in production)
-_strategies_db = {}
 
 
 def _risk_to_params(risk_level: str) -> dict:
@@ -44,15 +44,12 @@ def _risk_to_params(risk_level: str) -> dict:
 
 
 @router.post("/generate", response_model=StrategyGenerationResponse)
-async def generate_strategies(request: StrategyGenerationRequest):
+async def generate_strategies(request: StrategyGenerationRequest, db: Session = Depends(get_db)):
     """Generate strategies from natural language goal."""
     try:
         # Parse goal to spec
-        spec = parse_goal_to_spec(request.goal)
-        
-        # Generate task from spec
-        generator = TaskGenerator()
-        tasks = generator.generate_tasks(spec)
+        if HAS_AUREUS:
+            spec = parse_goal_to_spec(request.goal)
         
         # Convert risk preference to parameters
         risk_params = _risk_to_params(request.risk_preference.value)
@@ -64,33 +61,40 @@ async def generate_strategies(request: StrategyGenerationRequest):
             "ml_classifier", "volatility_trading"
         ]
         
+        request_id = str(uuid.uuid4())
+        
         for i, strategy_type in enumerate(strategy_types[:request.max_strategies]):
             param_adj = 1.0 - (i * 0.1)  # Decrease confidence for lower-ranked
             
+            # Create parameters dict
+            params_dict = {
+                "lookback": int(risk_params["lookback"] * param_adj),
+                "vol_target": risk_params["vol_target"],
+                "position_size": risk_params["position_size"],
+                "stop_loss": 2.0,
+                "take_profit": 5.0,
+            }
+            
+            # Save to database
+            strategy_data = {
+                "name": f"{strategy_type.replace('_', ' ').title()} Strategy",
+                "description": f"Generated strategy for: {request.goal}",
+                "strategy_type": strategy_type,
+                "confidence": 0.9 - (i * 0.1),
+                "parameters": params_dict,
+            }
+            
+            db_strategy = StrategyDB.create(db, strategy_data)
+            
+            # Create response object
             strategy = GeneratedStrategy(
                 strategy_type=StrategyType(strategy_type),
-                name=f"{strategy_type.replace('_', ' ').title()} Strategy",
-                description=f"Generated strategy for: {request.goal}",
-                parameters=StrategyParameters(
-                    lookback=int(risk_params["lookback"] * param_adj),
-                    vol_target=risk_params["vol_target"],
-                    position_size=risk_params["position_size"],
-                    stop_loss=2.0,
-                    take_profit=5.0,
-                ),
-                confidence=0.9 - (i * 0.1),
+                name=strategy_data["name"],
+                description=strategy_data["description"],
+                parameters=StrategyParameters(**params_dict),
+                confidence=strategy_data["confidence"],
             )
             strategies.append(strategy)
-        
-        # Store strategies
-        request_id = str(uuid.uuid4())
-        for strategy in strategies:
-            strategy_id = str(uuid.uuid4())
-            _strategies_db[strategy_id] = {
-                "strategy": strategy,
-                "created_at": datetime.utcnow().isoformat(),
-                "status": "active",
-            }
         
         return StrategyGenerationResponse(
             request_id=request_id,
@@ -109,14 +113,21 @@ async def generate_strategies(request: StrategyGenerationRequest):
 async def list_strategies(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
 ):
     """List all generated strategies."""
-    strategies_list = list(_strategies_db.values())
-    total = len(strategies_list)
+    strategies_db, total = StrategyDB.list(db, skip=skip, limit=limit)
     
-    # Paginate
-    paginated = strategies_list[skip:skip + limit]
-    strategies = [item["strategy"] for item in paginated]
+    strategies = []
+    for s in strategies_db:
+        strategy = GeneratedStrategy(
+            strategy_type=StrategyType(s.strategy_type),
+            name=s.name,
+            description=s.description,
+            parameters=StrategyParameters(**s.parameters),
+            confidence=s.confidence,
+        )
+        strategies.append(strategy)
     
     return StrategyListResponse(
         total=total,
@@ -125,27 +136,38 @@ async def list_strategies(
 
 
 @router.get("/{strategy_id}", response_model=StrategyDetailResponse)
-async def get_strategy(strategy_id: str):
+async def get_strategy(strategy_id: str, db: Session = Depends(get_db)):
     """Get details for a specific strategy."""
-    if strategy_id not in _strategies_db:
+    strategy_db = StrategyDB.get(db, strategy_id)
+    
+    if not strategy_db:
         raise HTTPException(
             status_code=404,
             detail=f"Strategy {strategy_id} not found"
         )
     
-    strategy_data = _strategies_db[strategy_id]
+    strategy = GeneratedStrategy(
+        strategy_type=StrategyType(strategy_db.strategy_type),
+        name=strategy_db.name,
+        description=strategy_db.description,
+        parameters=StrategyParameters(**strategy_db.parameters),
+        confidence=strategy_db.confidence,
+    )
+    
     return StrategyDetailResponse(
         strategy_id=strategy_id,
-        strategy=strategy_data["strategy"],
-        created_at=strategy_data["created_at"],
-        status=strategy_data["status"],
+        strategy=strategy,
+        created_at=strategy_db.created_at.isoformat(),
+        status=strategy_db.status,
     )
 
 
 @router.post("/{strategy_id}/validate")
-async def validate_strategy(strategy_id: str):
+async def validate_strategy(strategy_id: str, db: Session = Depends(get_db)):
     """Run quick validation on strategy parameters."""
-    if strategy_id not in _strategies_db:
+    strategy_db = StrategyDB.get(db, strategy_id)
+    
+    if not strategy_db:
         raise HTTPException(
             status_code=404,
             detail=f"Strategy {strategy_id} not found"

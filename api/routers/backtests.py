@@ -2,8 +2,9 @@
 import uuid
 import time
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException, BackgroundTasks, Query
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Depends
 from typing import Optional
+from sqlalchemy.orm import Session
 import sys
 import os
 
@@ -17,19 +18,20 @@ from schemas.backtest import (
     BacktestListResponse,
     BacktestDetailResponse,
 )
+from database.session import get_db
+from database.crud import BacktestDB
 
 router = APIRouter(prefix="/api/v1/backtests", tags=["backtests"])
 
-# In-memory storage for demo
-_backtests_db = {}
-_backtest_tasks = {}
 
-
-def _run_backtest(backtest_id: str, request: BacktestRequest):
-    """Run backtest in background (mock implementation)."""
+def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
+    """Run backtest in background with database persistence."""
     start_time = time.time()
     
     try:
+        # Update status to running
+        BacktestDB.update_running(db, backtest_id)
+        
         # Simulate backtest computation
         import random
         
@@ -39,55 +41,43 @@ def _run_backtest(backtest_id: str, request: BacktestRequest):
         max_dd = -random.uniform(8, 20)
         win_rate = random.uniform(45, 65)
         
-        metrics = BacktestMetrics(
-            total_return=base_return,
-            sharpe_ratio=sharpe,
-            sortino_ratio=sharpe * 1.2,
-            max_drawdown=max_dd,
-            win_rate=win_rate,
-            profit_factor=random.uniform(1.2, 2.5),
-            total_trades=random.randint(50, 200),
-            avg_trade=base_return / 100,
-            calmar_ratio=sharpe / abs(max_dd) if max_dd != 0 else 0,
-        )
+        metrics_dict = {
+            "total_return": base_return,
+            "sharpe_ratio": sharpe,
+            "sortino_ratio": sharpe * 1.2,
+            "max_drawdown": max_dd,
+            "win_rate": win_rate,
+            "profit_factor": random.uniform(1.2, 2.5),
+            "total_trades": random.randint(50, 200),
+            "avg_trade": base_return / 100,
+            "calmar_ratio": sharpe / abs(max_dd) if max_dd != 0 else 0,
+        }
         
         duration = time.time() - start_time
         
-        result = BacktestResult(
-            backtest_id=backtest_id,
-            strategy_id=request.strategy_id,
-            status="completed",
-            metrics=metrics,
-            start_date=request.start_date,
-            end_date=request.end_date,
-            completed_at=datetime.utcnow().isoformat(),
-            duration_seconds=duration,
-        )
-        
-        _backtests_db[backtest_id] = {
-            "result": result,
-            "request": request,
-            "trades": [],
-            "equity_curve": [],
-        }
-        _backtest_tasks[backtest_id] = "completed"
+        # Update with results
+        BacktestDB.update_completed(db, backtest_id, metrics_dict, duration)
         
     except Exception as e:
-        _backtests_db[backtest_id] = {
-            "result": None,
-            "error": str(e),
-        }
-        _backtest_tasks[backtest_id] = "failed"
+        BacktestDB.update_failed(db, backtest_id, str(e))
 
 
 @router.post("/run", response_model=dict)
-async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTasks):
+async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTasks, 
+                      db: Session = Depends(get_db)):
     """Run a backtest for a strategy."""
-    backtest_id = str(uuid.uuid4())
+    # Create backtest record in database
+    backtest_db = BacktestDB.create(db, request.strategy_id, {
+        "start_date": request.start_date,
+        "end_date": request.end_date,
+        "initial_capital": request.initial_capital,
+        "instruments": request.instruments,
+    })
+    
+    backtest_id = backtest_db.id
     
     # Start backtest in background
-    background_tasks.add_task(_run_backtest, backtest_id, request)
-    _backtest_tasks[backtest_id] = "running"
+    background_tasks.add_task(_run_backtest, backtest_id, request, db)
     
     return {
         "backtest_id": backtest_id,
@@ -98,49 +88,68 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
 
 
 @router.get("/{backtest_id}/status")
-async def get_backtest_status(backtest_id: str):
+async def get_backtest_status(backtest_id: str, db: Session = Depends(get_db)):
     """Check status of a backtest."""
-    if backtest_id not in _backtest_tasks:
+    backtest_db = BacktestDB.get(db, backtest_id)
+    
+    if not backtest_db:
         raise HTTPException(
             status_code=404,
             detail=f"Backtest {backtest_id} not found"
         )
     
-    status = _backtest_tasks[backtest_id]
-    result = _backtests_db.get(backtest_id, {}).get("result")
-    
     response = {
         "backtest_id": backtest_id,
-        "status": status,
+        "status": backtest_db.status,
     }
     
-    if result:
-        response["result"] = result
+    if backtest_db.status == "completed" and backtest_db.metrics:
+        response["result"] = {
+            "backtest_id": backtest_id,
+            "strategy_id": backtest_db.strategy_id,
+            "status": backtest_db.status,
+            "metrics": backtest_db.metrics,
+            "start_date": backtest_db.start_date,
+            "end_date": backtest_db.end_date,
+            "completed_at": backtest_db.completed_at.isoformat(),
+            "duration_seconds": backtest_db.duration_seconds,
+        }
     
     return response
 
 
 @router.get("/{backtest_id}", response_model=BacktestDetailResponse)
-async def get_backtest(backtest_id: str):
+async def get_backtest(backtest_id: str, db: Session = Depends(get_db)):
     """Get details for a completed backtest."""
-    if backtest_id not in _backtests_db:
+    backtest_db = BacktestDB.get(db, backtest_id)
+    
+    if not backtest_db:
         raise HTTPException(
             status_code=404,
             detail=f"Backtest {backtest_id} not found"
         )
     
-    data = _backtests_db[backtest_id]
-    
-    if "error" in data:
+    if backtest_db.status != "completed":
         raise HTTPException(
-            status_code=500,
-            detail=f"Backtest failed: {data['error']}"
+            status_code=400,
+            detail=f"Backtest is {backtest_db.status}"
         )
     
+    result = BacktestResult(
+        backtest_id=backtest_db.id,
+        strategy_id=backtest_db.strategy_id,
+        status=backtest_db.status,
+        metrics=BacktestMetrics(**backtest_db.metrics),
+        start_date=backtest_db.start_date,
+        end_date=backtest_db.end_date,
+        completed_at=backtest_db.completed_at.isoformat(),
+        duration_seconds=backtest_db.duration_seconds or 0,
+    )
+    
     return BacktestDetailResponse(
-        backtest=data["result"],
-        trades=data.get("trades"),
-        equity_curve=data.get("equity_curve"),
+        backtest=result,
+        trades=backtest_db.trades,
+        equity_curve=backtest_db.equity_curve,
     )
 
 
@@ -149,23 +158,31 @@ async def list_backtests(
     strategy_id: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
 ):
     """List backtests, optionally filtered by strategy."""
-    backtests_list = [
-        data["result"] for data in _backtests_db.values()
-        if data.get("result") is not None
-    ]
     
     if strategy_id:
-        backtests_list = [
-            bt for bt in backtests_list 
-            if bt.strategy_id == strategy_id
-        ]
+        backtests_db, total = BacktestDB.list_by_strategy(db, strategy_id, skip, limit)
+    else:
+        backtests_db, total = BacktestDB.list_all(db, skip, limit)
     
-    total = len(backtests_list)
-    paginated = backtests_list[skip:skip + limit]
+    backtests = []
+    for bt in backtests_db:
+        if bt.status == "completed" and bt.metrics:
+            result = BacktestResult(
+                backtest_id=bt.id,
+                strategy_id=bt.strategy_id,
+                status=bt.status,
+                metrics=BacktestMetrics(**bt.metrics),
+                start_date=bt.start_date,
+                end_date=bt.end_date,
+                completed_at=bt.completed_at.isoformat(),
+                duration_seconds=bt.duration_seconds or 0,
+            )
+            backtests.append(result)
     
     return BacktestListResponse(
         total=total,
-        backtests=paginated,
+        backtests=backtests,
     )

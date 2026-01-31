@@ -35,6 +35,11 @@ app.include_router(backtests.router)
 app.include_router(validation.router)
 app.include_router(gates.router)
 
+# Initialize database
+from database.session import Base, engine
+
+# Create tables on startup
+Base.metadata.create_all(bind=engine)
 
 @app.get("/")
 async def root():
