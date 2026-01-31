@@ -5,9 +5,13 @@ from fastapi.responses import JSONResponse
 from datetime import datetime
 import sys
 import os
+from pathlib import Path
+
+# Add api directory to path for imports
+sys.path.insert(0, str(Path(__file__).parent))
 
 # Import routers
-from api.routers import strategies, backtests, validation, gates
+from routers import strategies, backtests, validation, gates
 
 # Create FastAPI app
 app = FastAPI(

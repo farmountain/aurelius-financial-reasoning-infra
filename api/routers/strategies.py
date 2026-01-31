@@ -6,12 +6,18 @@ from typing import Optional
 import sys
 import os
 
-# Add python package to path for importing aureus
+# Add paths for imports
+sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../python'))
 
-from aureus.tasks.task_generator import TaskGenerator
-from aureus.cli import parse_goal_to_spec
-from api.schemas.strategy import (
+try:
+    from aureus.tasks.task_generator import TaskGenerator
+    from aureus.cli import parse_goal_to_spec
+    HAS_AUREUS = True
+except ImportError:
+    HAS_AUREUS = False
+
+from schemas.strategy import (
     StrategyGenerationRequest,
     StrategyGenerationResponse,
     GeneratedStrategy,

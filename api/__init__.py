@@ -1,5 +1,9 @@
 """AURELIUS REST API package."""
-from api.config import settings
+try:
+    from api.config import settings
+except ImportError:
+    # Handle relative imports when running as module
+    from config import settings
 
 __version__ = "1.0.0"
 __author__ = "AURELIUS Team"

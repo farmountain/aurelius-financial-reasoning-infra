@@ -7,10 +7,10 @@ from typing import Optional
 import sys
 import os
 
-# Add python package to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../python'))
+# Add paths for imports
+sys.path.insert(0, os.path.dirname(__file__))
 
-from api.schemas.validation import (
+from schemas.validation import (
     ValidationRequest,
     ValidationResult,
     ValidationMetrics,
