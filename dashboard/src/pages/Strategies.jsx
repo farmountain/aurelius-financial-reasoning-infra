@@ -5,11 +5,15 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import EmptyState from '../components/EmptyState';
 import { Layers, Plus, TrendingUp } from 'lucide-react';
+import StrategyGenerationModal from '../components/StrategyGenerationModal';
 
 const Strategies = () => {
   const [strategies, setStrategies] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [actionError, setActionError] = useState(null);
 
   useEffect(() => {
     loadStrategies();
@@ -25,6 +29,20 @@ const Strategies = () => {
       setError(err.message || 'Failed to load strategies');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGenerate = async (payload) => {
+    setIsGenerating(true);
+    setActionError(null);
+    try {
+      await strategiesAPI.generate(payload);
+      setIsModalOpen(false);
+      await loadStrategies();
+    } catch (err) {
+      setActionError(err.message || 'Failed to generate strategy');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -47,11 +65,20 @@ const Strategies = () => {
           <h1 className="text-3xl font-bold text-white mb-2">Strategies</h1>
           <p className="text-gray-400">Manage and monitor your trading strategies</p>
         </div>
-        <button className="flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors">
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+        >
           <Plus className="w-5 h-5 mr-2" />
           Generate Strategy
         </button>
       </div>
+
+      {actionError && (
+        <div className="p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-300">
+          {actionError}
+        </div>
+      )}
 
       {strategies.length === 0 ? (
         <EmptyState
@@ -71,6 +98,13 @@ const Strategies = () => {
           ))}
         </div>
       )}
+
+      <StrategyGenerationModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleGenerate}
+        loading={isGenerating}
+      />
     </div>
   );
 };

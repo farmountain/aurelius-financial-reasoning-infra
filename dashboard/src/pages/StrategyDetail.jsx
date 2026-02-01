@@ -4,6 +4,7 @@ import { strategiesAPI, backtestsAPI, gatesAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { ArrowLeft, Play, CheckCircle, XCircle } from 'lucide-react';
+import BacktestModal from '../components/BacktestModal';
 
 const StrategyDetail = () => {
   const { id } = useParams();
@@ -12,6 +13,9 @@ const StrategyDetail = () => {
   const [gates, setGates] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isRunning, setIsRunning] = useState(false);
+  const [actionError, setActionError] = useState(null);
 
   useEffect(() => {
     loadStrategyData();
@@ -33,6 +37,21 @@ const StrategyDetail = () => {
       setError(err.message || 'Failed to load strategy details');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRunBacktest = async (payload) => {
+    setIsRunning(true);
+    setActionError(null);
+    try {
+      await backtestsAPI.run(id, payload);
+      setIsModalOpen(false);
+      const backtestsData = await backtestsAPI.list(id, 10, 0);
+      setBacktests(backtestsData);
+    } catch (err) {
+      setActionError(err.message || 'Failed to run backtest');
+    } finally {
+      setIsRunning(false);
     }
   };
 
@@ -61,11 +80,20 @@ const StrategyDetail = () => {
           <h1 className="text-3xl font-bold text-white mb-1">{strategy.name}</h1>
           <p className="text-gray-400">{strategy.strategy_type}</p>
         </div>
-        <button className="flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors">
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors"
+        >
           <Play className="w-4 h-4 mr-2" />
           Run Backtest
         </button>
       </div>
+
+      {actionError && (
+        <div className="p-4 bg-red-900/20 border border-red-800 rounded-lg text-red-300">
+          {actionError}
+        </div>
+      )}
 
       {/* Strategy Info */}
       <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
@@ -129,6 +157,14 @@ const StrategyDetail = () => {
           </div>
         )}
       </div>
+
+      <BacktestModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onSubmit={handleRunBacktest}
+        strategyId={id}
+        loading={isRunning}
+      />
     </div>
   );
 };
