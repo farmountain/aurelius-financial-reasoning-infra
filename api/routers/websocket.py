@@ -5,7 +5,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 from fastapi.responses import JSONResponse
 
 from websocket.manager import manager
-from security.auth import verify_access_token
+from security.auth import verify_token
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +51,10 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
     
     try:
         # Verify JWT token
-        token_data = verify_access_token(token)
+        token_data = verify_token(token)
+        if not token_data:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
         user_id = token_data.user_id
         
         # Accept connection
