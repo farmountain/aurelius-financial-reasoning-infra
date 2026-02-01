@@ -7,6 +7,8 @@ import StrategyDetail from './pages/StrategyDetail';
 import Backtests from './pages/Backtests';
 import Validations from './pages/Validations';
 import Gates from './pages/Gates';
+import Reflexion from './pages/Reflexion';
+import Orchestrator from './pages/Orchestrator';
 
 function App() {
   return (
@@ -23,8 +25,8 @@ function App() {
               <Route path="/backtests" element={<Backtests />} />
               <Route path="/validations" element={<Validations />} />
               <Route path="/gates" element={<Gates />} />
-              <Route path="/reflexion" element={<PlaceholderPage title="Reflexion" />} />
-              <Route path="/orchestrator" element={<PlaceholderPage title="Orchestrator" />} />
+              <Route path="/reflexion" element={<Reflexion />} />
+              <Route path="/orchestrator" element={<Orchestrator />} />
             </Routes>
           </main>
         </div>
@@ -37,7 +39,7 @@ const PlaceholderPage = ({ title }) => (
   <div className="flex items-center justify-center h-full">
     <div className="text-center">
       <h1 className="text-3xl font-bold text-white mb-2">{title}</h1>
-      <p className="text-gray-400">This page is under construction</p>
+      <p className="text-gray-400">Coming soon</p>
     </div>
   </div>
 );
