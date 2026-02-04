@@ -93,6 +93,18 @@ Successfully delivered a complete Python orchestrator for AURELIUS Quant Reasoni
 - **Implementation**: Orchestrator parses goals to extract constraints
 - **Script**: `python/examples/run_example.sh`
 
+  ## Recent Changes (2026-02-04)
+
+  - Fixed WebSocket authentication and routing in the API:
+    - Required JWT auth for strategy generation and backtest endpoints.
+    - Returned `id` for generated strategies so clients can run backtests.
+    - Fixed indentation and registered WebSocket route at both `/ws` and `/ws/` to avoid connection rejections.
+    - All integration tests now pass (10/10) after the fix.
+
+  Commit: chore(websocket): require auth, include strategy IDs, fix routing
+  Branch: fix/websocket-auth
+
+
 ### 8. Tests ✅
 
 **FSM Denies Invalid Tool Sequences**:
