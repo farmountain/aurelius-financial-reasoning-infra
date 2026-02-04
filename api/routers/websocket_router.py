@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
 
+@router.websocket("")
 @router.websocket("/")
-async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
+async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
     """
     WebSocket endpoint for real-time updates.
     
@@ -64,7 +65,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
         
         # Accept connection
         await manager.connect(websocket, user_id)
-        
+
         # Send connection confirmation
         await websocket.send_json({
             "type": "connected",
@@ -73,14 +74,14 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 "user_id": user_id
             }
         })
-        
+
         # Listen for client messages
         while True:
             data = await websocket.receive_json()
-            
+
             # Handle client commands
             action = data.get("action")
-            
+
             if action == "subscribe":
                 event_types = data.get("events", [])
                 await manager.subscribe(user_id, event_types)
@@ -88,7 +89,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                     "type": "subscribed",
                     "data": {"events": event_types}
                 })
-            
+
             elif action == "unsubscribe":
                 event_types = data.get("events", [])
                 await manager.unsubscribe(user_id, event_types)
@@ -96,13 +97,13 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                     "type": "unsubscribed",
                     "data": {"events": event_types}
                 })
-            
+
             elif action == "ping":
                 await websocket.send_json({
                     "type": "pong",
                     "data": {"timestamp": data.get("timestamp")}
                 })
-            
+
             else:
                 logger.warning(f"Unknown action from user {user_id}: {action}")
     

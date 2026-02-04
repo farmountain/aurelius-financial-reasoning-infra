@@ -52,6 +52,7 @@ class StrategyParameters(BaseModel):
 
 class GeneratedStrategy(BaseModel):
     """A generated strategy with its parameters."""
+    id: str = Field(..., description="Unique strategy identifier")
     strategy_type: StrategyType = Field(..., description="Type of strategy")
     name: str = Field(..., description="Human-readable strategy name")
     description: str = Field(..., description="Strategy description")
