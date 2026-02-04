@@ -2,7 +2,6 @@
 import os
 from sqlalchemy import text
 from database.session import engine, Base
-from database.models import Strategy, Backtest, Validation, GateResult
 
 
 def init_db():
@@ -21,7 +20,7 @@ def drop_db():
     """Drop all tables - WARNING: Destructive operation."""
     print("⚠️  WARNING: This will drop all tables!")
     response = input("Type 'yes' to confirm: ").strip().lower()
-    
+
     if response == "yes":
         print("Dropping database tables...")
         try:
@@ -62,7 +61,7 @@ def check_connection():
 
 if __name__ == "__main__":
     import sys
-    
+
     if len(sys.argv) < 2:
         print("Usage: python init_db.py [command]")
         print("\nCommands:")
@@ -71,9 +70,9 @@ if __name__ == "__main__":
         print("  reset   - Drop and recreate all tables")
         print("  check   - Check database connection")
         sys.exit(1)
-    
+
     command = sys.argv[1].lower()
-    
+
     if command == "init":
         init_db()
     elif command == "drop":

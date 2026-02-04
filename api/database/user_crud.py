@@ -46,11 +46,11 @@ class UserDB:
         user = UserDB.get_by_id(db, user_id)
         if not user:
             return None
-        
+
         for key, value in kwargs.items():
             if hasattr(user, key):
                 setattr(user, key, value)
-        
+
         db.commit()
         db.refresh(user)
         return user
@@ -61,7 +61,7 @@ class UserDB:
         user = UserDB.get_by_id(db, user_id)
         if not user:
             return False
-        
+
         db.delete(user)
         db.commit()
         return True

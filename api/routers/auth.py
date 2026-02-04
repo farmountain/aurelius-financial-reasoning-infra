@@ -8,10 +8,8 @@ from security.auth import (
     UserResponse,
     Token,
     create_access_token,
-    verify_token,
 )
-from security.dependencies import get_current_user, get_token_from_header
-from typing import Optional
+from security.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 

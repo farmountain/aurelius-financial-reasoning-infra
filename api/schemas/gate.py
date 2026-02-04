@@ -38,20 +38,20 @@ class CRVGateResult(BaseModel):
     strategy_id: str = Field(..., description="Strategy ID")
     gate_status: str = Field(..., description="Overall gate status")
     passed: bool = Field(..., description="Whether strategy passed CRV gate")
-    
+
     # CRV specific metrics
     min_sharpe_threshold: float = Field(..., description="Minimum Sharpe ratio required")
     max_drawdown_threshold: float = Field(..., description="Maximum drawdown allowed")
     min_return_threshold: float = Field(..., description="Minimum return required")
-    
+
     actual_sharpe: float = Field(..., description="Actual Sharpe ratio")
     actual_drawdown: float = Field(..., description="Actual maximum drawdown")
     actual_return: float = Field(..., description="Actual return")
-    
+
     sharpe_pass: bool = Field(..., description="Sharpe ratio check passed")
     drawdown_pass: bool = Field(..., description="Drawdown check passed")
     return_pass: bool = Field(..., description="Return check passed")
-    
+
     timestamp: str = Field(..., description="Check timestamp")
 
 
@@ -62,14 +62,14 @@ class ProductGateResult(BaseModel):
         ...,
         description="Whether strategy is ready for production"
     )
-    
+
     dev_gate: DevGateResult = Field(..., description="Dev gate results")
     crv_gate: CRVGateResult = Field(..., description="CRV gate results")
     validation_passed: bool = Field(
         ...,
         description="Walk-forward validation passed"
     )
-    
+
     recommendation: str = Field(
         ...,
         description="Production readiness recommendation"

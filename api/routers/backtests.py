@@ -1,7 +1,6 @@
 """Backtest management router."""
-import uuid
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from fastapi import APIRouter, HTTPException, BackgroundTasks, Query, Depends
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -31,11 +30,11 @@ router = APIRouter(prefix="/api/v1/backtests", tags=["backtests"])
 def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
     """Run backtest in background with database persistence."""
     start_time = time.time()
-    
+
     try:
         # Update status to running
         BacktestDB.update_running(db, backtest_id)
-        
+
         # Broadcast start event
         asyncio.create_task(manager.broadcast({
             "type": "backtest_started",
@@ -45,16 +44,16 @@ def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
                 "timestamp": datetime.utcnow().isoformat()
             }
         }, event_type="backtest_started"))
-        
+
         # Simulate backtest computation
         import random
-        
+
         # Generate mock metrics
         base_return = random.uniform(5, 25)
         sharpe = random.uniform(0.8, 2.5)
         max_dd = -random.uniform(8, 20)
         win_rate = random.uniform(45, 65)
-        
+
         metrics_dict = {
             "total_return": base_return,
             "sharpe_ratio": sharpe,
@@ -66,12 +65,12 @@ def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
             "avg_trade": base_return / 100,
             "calmar_ratio": sharpe / abs(max_dd) if max_dd != 0 else 0,
         }
-        
+
         duration = time.time() - start_time
-        
+
         # Update with results
         BacktestDB.update_completed(db, backtest_id, metrics_dict, duration)
-        
+
         # Broadcast completion event
         asyncio.create_task(manager.broadcast({
             "type": "backtest_completed",
@@ -83,10 +82,10 @@ def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
                 "timestamp": datetime.utcnow().isoformat()
             }
         }, event_type="backtest_completed"))
-        
+
     except Exception as e:
         BacktestDB.update_failed(db, backtest_id, str(e))
-        
+
         # Broadcast error event
         asyncio.create_task(manager.broadcast({
             "type": "backtest_failed",
@@ -99,7 +98,7 @@ def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
 
 
 @router.post("/run", response_model=dict)
-async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTasks, 
+async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTasks,
                       current_user: TokenData = Depends(get_current_user),
                       db: Session = Depends(get_db)):
     """Run a backtest for a strategy."""
@@ -110,12 +109,12 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
         "initial_capital": request.initial_capital,
         "instruments": request.instruments,
     })
-    
+
     backtest_id = backtest_db.id
-    
+
     # Start backtest in background
     background_tasks.add_task(_run_backtest, backtest_id, request, db)
-    
+
     return {
         "backtest_id": backtest_id,
         "status": "running",
@@ -128,18 +127,18 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
 async def get_backtest_status(backtest_id: str, current_user: TokenData = Depends(get_current_user), db: Session = Depends(get_db)):
     """Check status of a backtest."""
     backtest_db = BacktestDB.get(db, backtest_id)
-    
+
     if not backtest_db:
         raise HTTPException(
             status_code=404,
             detail=f"Backtest {backtest_id} not found"
         )
-    
+
     response = {
         "backtest_id": backtest_id,
         "status": backtest_db.status,
     }
-    
+
     if backtest_db.status == "completed" and backtest_db.metrics:
         response["result"] = {
             "backtest_id": backtest_id,
@@ -151,7 +150,7 @@ async def get_backtest_status(backtest_id: str, current_user: TokenData = Depend
             "completed_at": backtest_db.completed_at.isoformat(),
             "duration_seconds": backtest_db.duration_seconds,
         }
-    
+
     return response
 
 
@@ -159,19 +158,19 @@ async def get_backtest_status(backtest_id: str, current_user: TokenData = Depend
 async def get_backtest(backtest_id: str, db: Session = Depends(get_db)):
     """Get details for a completed backtest."""
     backtest_db = BacktestDB.get(db, backtest_id)
-    
+
     if not backtest_db:
         raise HTTPException(
             status_code=404,
             detail=f"Backtest {backtest_id} not found"
         )
-    
+
     if backtest_db.status != "completed":
         raise HTTPException(
             status_code=400,
             detail=f"Backtest is {backtest_db.status}"
         )
-    
+
     result = BacktestResult(
         backtest_id=backtest_db.id,
         strategy_id=backtest_db.strategy_id,
@@ -182,7 +181,7 @@ async def get_backtest(backtest_id: str, db: Session = Depends(get_db)):
         completed_at=backtest_db.completed_at.isoformat(),
         duration_seconds=backtest_db.duration_seconds or 0,
     )
-    
+
     return BacktestDetailResponse(
         backtest=result,
         trades=backtest_db.trades,
@@ -198,12 +197,12 @@ async def list_backtests(
     db: Session = Depends(get_db),
 ):
     """List backtests, optionally filtered by strategy."""
-    
+
     if strategy_id:
         backtests_db, total = BacktestDB.list_by_strategy(db, strategy_id, skip, limit)
     else:
         backtests_db, total = BacktestDB.list_all(db, skip, limit)
-    
+
     backtests = []
     for bt in backtests_db:
         if bt.status == "completed" and bt.metrics:
@@ -218,7 +217,7 @@ async def list_backtests(
                 duration_seconds=bt.duration_seconds or 0,
             )
             backtests.append(result)
-    
+
     return BacktestListResponse(
         total=total,
         backtests=backtests,

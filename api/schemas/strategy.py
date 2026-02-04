@@ -26,7 +26,7 @@ class RiskPreference(str, Enum):
 class StrategyGenerationRequest(BaseModel):
     """Request to generate a strategy from natural language."""
     goal: str = Field(
-        ..., 
+        ...,
         description="Natural language description of trading goal"
     )
     risk_preference: RiskPreference = Field(
@@ -58,8 +58,8 @@ class GeneratedStrategy(BaseModel):
     description: str = Field(..., description="Strategy description")
     parameters: StrategyParameters = Field(..., description="Strategy parameters")
     confidence: float = Field(
-        ..., 
-        ge=0.0, 
+        ...,
+        ge=0.0,
         le=1.0,
         description="Confidence score for this strategy"
     )

@@ -1,5 +1,4 @@
 """Database session management."""
-import os
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from config import settings

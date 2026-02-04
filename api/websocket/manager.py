@@ -18,14 +18,14 @@ class ConnectionManager:
     - Event-based message routing
     - Automatic cleanup on disconnect
     """
-    
+
     def __init__(self):
         # Store active connections: {user_id: [websockets]}
         self.active_connections: Dict[str, List[WebSocket]] = {}
-        
+
         # Track subscriptions: {user_id: set(event_types)}
         self.subscriptions: Dict[str, Set[str]] = {}
-    
+
     async def connect(self, websocket: WebSocket, user_id: str):
         """
         Accept a new WebSocket connection.
@@ -35,13 +35,13 @@ class ConnectionManager:
             user_id: The authenticated user's ID
         """
         await websocket.accept()
-        
+
         if user_id not in self.active_connections:
             self.active_connections[user_id] = []
             self.subscriptions[user_id] = set()
-        
+
         self.active_connections[user_id].append(websocket)
-        
+
         # Default subscriptions for all users
         self.subscriptions[user_id].update([
             "dashboard_update",
@@ -49,9 +49,9 @@ class ConnectionManager:
             "backtest_started",
             "backtest_completed"
         ])
-        
+
         logger.info(f"WebSocket connected for user {user_id}. Total connections: {self._get_connection_count()}")
-    
+
     def disconnect(self, websocket: WebSocket, user_id: str):
         """
         Remove a WebSocket connection.
@@ -65,15 +65,15 @@ class ConnectionManager:
                 self.active_connections[user_id].remove(websocket)
             except ValueError:
                 pass
-            
+
             # Clean up empty lists
             if not self.active_connections[user_id]:
                 del self.active_connections[user_id]
                 if user_id in self.subscriptions:
                     del self.subscriptions[user_id]
-        
+
         logger.info(f"WebSocket disconnected for user {user_id}. Total connections: {self._get_connection_count()}")
-    
+
     async def send_personal_message(self, message: dict, user_id: str):
         """
         Send a message to a specific user's connections.
@@ -84,21 +84,21 @@ class ConnectionManager:
         """
         if user_id not in self.active_connections:
             return
-        
+
         message_text = json.dumps(message)
         dead_connections = []
-        
+
         for connection in self.active_connections[user_id]:
             try:
                 await connection.send_text(message_text)
             except Exception as e:
                 logger.error(f"Error sending message to user {user_id}: {e}")
                 dead_connections.append(connection)
-        
+
         # Clean up dead connections
         for dead in dead_connections:
             self.disconnect(dead, user_id)
-    
+
     async def broadcast(self, message: dict, event_type: str = None):
         """
         Broadcast a message to all connected clients.
@@ -109,23 +109,23 @@ class ConnectionManager:
         """
         message_text = json.dumps(message)
         dead_connections = []
-        
+
         for user_id, connections in list(self.active_connections.items()):
             # Check if user is subscribed to this event type
             if event_type and event_type not in self.subscriptions.get(user_id, set()):
                 continue
-            
+
             for connection in connections:
                 try:
                     await connection.send_text(message_text)
                 except Exception as e:
                     logger.error(f"Error broadcasting to user {user_id}: {e}")
                     dead_connections.append((connection, user_id))
-        
+
         # Clean up dead connections
         for dead, user_id in dead_connections:
             self.disconnect(dead, user_id)
-    
+
     async def subscribe(self, user_id: str, event_types: List[str]):
         """
         Subscribe a user to specific event types.
@@ -136,10 +136,10 @@ class ConnectionManager:
         """
         if user_id not in self.subscriptions:
             self.subscriptions[user_id] = set()
-        
+
         self.subscriptions[user_id].update(event_types)
         logger.info(f"User {user_id} subscribed to: {event_types}")
-    
+
     async def unsubscribe(self, user_id: str, event_types: List[str]):
         """
         Unsubscribe a user from specific event types.
@@ -151,11 +151,11 @@ class ConnectionManager:
         if user_id in self.subscriptions:
             self.subscriptions[user_id].difference_update(event_types)
             logger.info(f"User {user_id} unsubscribed from: {event_types}")
-    
+
     def _get_connection_count(self) -> int:
         """Get the total number of active connections."""
         return sum(len(conns) for conns in self.active_connections.values())
-    
+
     def get_stats(self) -> dict:
         """
         Get statistics about active connections.
@@ -167,7 +167,7 @@ class ConnectionManager:
             "total_connections": self._get_connection_count(),
             "unique_users": len(self.active_connections),
             "connections_by_user": {
-                user_id: len(conns) 
+                user_id: len(conns)
                 for user_id, conns in self.active_connections.items()
             }
         }

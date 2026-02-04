@@ -2,12 +2,11 @@
 from sqlalchemy.orm import Session
 from database.models import Strategy, Backtest, Validation, GateResult
 from datetime import datetime
-import json
 
 
 class StrategyDB:
     """Strategy database operations."""
-    
+
     @staticmethod
     def create(db: Session, strategy_data: dict) -> Strategy:
         """Create a new strategy."""
@@ -23,19 +22,19 @@ class StrategyDB:
         db.commit()
         db.refresh(strategy)
         return strategy
-    
+
     @staticmethod
     def get(db: Session, strategy_id: str) -> Strategy:
         """Get strategy by ID."""
         return db.query(Strategy).filter(Strategy.id == strategy_id).first()
-    
+
     @staticmethod
     def list(db: Session, skip: int = 0, limit: int = 10) -> tuple:
         """List strategies with pagination."""
         total = db.query(Strategy).count()
         strategies = db.query(Strategy).offset(skip).limit(limit).all()
         return strategies, total
-    
+
     @staticmethod
     def get_all(db: Session) -> list:
         """Get all strategies."""
@@ -44,7 +43,7 @@ class StrategyDB:
 
 class BacktestDB:
     """Backtest database operations."""
-    
+
     @staticmethod
     def create(db: Session, strategy_id: str, request_data: dict) -> Backtest:
         """Create a new backtest record."""
@@ -60,7 +59,7 @@ class BacktestDB:
         db.commit()
         db.refresh(backtest)
         return backtest
-    
+
     @staticmethod
     def update_running(db: Session, backtest_id: str) -> Backtest:
         """Mark backtest as running."""
@@ -70,9 +69,9 @@ class BacktestDB:
             db.commit()
             db.refresh(backtest)
         return backtest
-    
+
     @staticmethod
-    def update_completed(db: Session, backtest_id: str, metrics: dict, 
+    def update_completed(db: Session, backtest_id: str, metrics: dict,
                         duration: float) -> Backtest:
         """Mark backtest as completed with results."""
         backtest = db.query(Backtest).filter(Backtest.id == backtest_id).first()
@@ -84,7 +83,7 @@ class BacktestDB:
             db.commit()
             db.refresh(backtest)
         return backtest
-    
+
     @staticmethod
     def update_failed(db: Session, backtest_id: str, error_message: str) -> Backtest:
         """Mark backtest as failed."""
@@ -96,21 +95,21 @@ class BacktestDB:
             db.commit()
             db.refresh(backtest)
         return backtest
-    
+
     @staticmethod
     def get(db: Session, backtest_id: str) -> Backtest:
         """Get backtest by ID."""
         return db.query(Backtest).filter(Backtest.id == backtest_id).first()
-    
+
     @staticmethod
-    def list_by_strategy(db: Session, strategy_id: str, 
+    def list_by_strategy(db: Session, strategy_id: str,
                         skip: int = 0, limit: int = 10) -> tuple:
         """List backtests for a strategy."""
         query = db.query(Backtest).filter(Backtest.strategy_id == strategy_id)
         total = query.count()
         backtests = query.offset(skip).limit(limit).all()
         return backtests, total
-    
+
     @staticmethod
     def list_all(db: Session, skip: int = 0, limit: int = 10) -> tuple:
         """List all backtests."""
@@ -121,7 +120,7 @@ class BacktestDB:
 
 class ValidationDB:
     """Validation database operations."""
-    
+
     @staticmethod
     def create(db: Session, strategy_id: str, request_data: dict) -> Validation:
         """Create a new validation record."""
@@ -138,9 +137,9 @@ class ValidationDB:
         db.commit()
         db.refresh(validation)
         return validation
-    
+
     @staticmethod
-    def update_completed(db: Session, validation_id: str, windows: list, 
+    def update_completed(db: Session, validation_id: str, windows: list,
                         metrics: dict, duration: float) -> Validation:
         """Mark validation as completed with results."""
         validation = db.query(Validation).filter(Validation.id == validation_id).first()
@@ -159,7 +158,7 @@ class ValidationDB:
             db.commit()
             db.refresh(validation)
         return validation
-    
+
     @staticmethod
     def update_failed(db: Session, validation_id: str, error_message: str) -> Validation:
         """Mark validation as failed."""
@@ -171,21 +170,21 @@ class ValidationDB:
             db.commit()
             db.refresh(validation)
         return validation
-    
+
     @staticmethod
     def get(db: Session, validation_id: str) -> Validation:
         """Get validation by ID."""
         return db.query(Validation).filter(Validation.id == validation_id).first()
-    
+
     @staticmethod
-    def list_by_strategy(db: Session, strategy_id: str, 
+    def list_by_strategy(db: Session, strategy_id: str,
                         skip: int = 0, limit: int = 10) -> tuple:
         """List validations for a strategy."""
         query = db.query(Validation).filter(Validation.strategy_id == strategy_id)
         total = query.count()
         validations = query.offset(skip).limit(limit).all()
         return validations, total
-    
+
     @staticmethod
     def list_all(db: Session, skip: int = 0, limit: int = 10) -> tuple:
         """List all validations."""
@@ -196,9 +195,9 @@ class ValidationDB:
 
 class GateResultDB:
     """Gate result database operations."""
-    
+
     @staticmethod
-    def create(db: Session, strategy_id: str, gate_type: str, 
+    def create(db: Session, strategy_id: str, gate_type: str,
               passed: bool, results: dict) -> GateResult:
         """Create a new gate result."""
         gate_result = GateResult(
@@ -213,7 +212,7 @@ class GateResultDB:
         db.commit()
         db.refresh(gate_result)
         return gate_result
-    
+
     @staticmethod
     def get_latest(db: Session, strategy_id: str, gate_type: str) -> GateResult:
         """Get latest gate result for a strategy."""
@@ -221,16 +220,16 @@ class GateResultDB:
             GateResult.strategy_id == strategy_id,
             GateResult.gate_type == gate_type
         ).order_by(GateResult.timestamp.desc()).first()
-    
+
     @staticmethod
-    def list_by_strategy(db: Session, strategy_id: str, 
+    def list_by_strategy(db: Session, strategy_id: str,
                         skip: int = 0, limit: int = 10) -> tuple:
         """List gate results for a strategy."""
         query = db.query(GateResult).filter(GateResult.strategy_id == strategy_id)
         total = query.count()
         results = query.offset(skip).limit(limit).all()
         return results, total
-    
+
     @staticmethod
     def get_product_gate(db: Session, strategy_id: str) -> GateResult:
         """Get latest product gate result."""

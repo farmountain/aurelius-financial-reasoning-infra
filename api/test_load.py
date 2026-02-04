@@ -8,7 +8,7 @@ try:
     from main import app
     print("✅ App loaded successfully")
     print(f"✅ App routes: {len(app.routes)} routes defined")
-except Exception as e:
-    print(f"❌ Error loading app:")
+except Exception:
+    print("❌ Error loading app:")
     traceback.print_exc()
     sys.exit(1)

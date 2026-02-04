@@ -18,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     """Create initial schema."""
-    
+
     # Create strategies table
     op.create_table(
         'strategies',
@@ -35,7 +35,7 @@ def upgrade() -> None:
     )
     op.create_index('idx_strategies_type', 'strategies', ['strategy_type'])
     op.create_index('idx_strategies_created', 'strategies', ['created_at'])
-    
+
     # Create backtests table
     op.create_table(
         'backtests',
@@ -59,7 +59,7 @@ def upgrade() -> None:
     op.create_index('idx_backtests_strategy', 'backtests', ['strategy_id'])
     op.create_index('idx_backtests_status', 'backtests', ['status'])
     op.create_index('idx_backtests_created', 'backtests', ['created_at'])
-    
+
     # Create validations table
     op.create_table(
         'validations',
@@ -89,7 +89,7 @@ def upgrade() -> None:
     op.create_index('idx_validations_strategy', 'validations', ['strategy_id'])
     op.create_index('idx_validations_status', 'validations', ['status'])
     op.create_index('idx_validations_created', 'validations', ['created_at'])
-    
+
     # Create gate_results table
     op.create_table(
         'gate_results',
@@ -115,17 +115,17 @@ def downgrade() -> None:
     op.drop_index('idx_gate_results_type')
     op.drop_index('idx_gate_results_strategy')
     op.drop_table('gate_results')
-    
+
     op.drop_index('idx_validations_created')
     op.drop_index('idx_validations_status')
     op.drop_index('idx_validations_strategy')
     op.drop_table('validations')
-    
+
     op.drop_index('idx_backtests_created')
     op.drop_index('idx_backtests_status')
     op.drop_index('idx_backtests_strategy')
     op.drop_table('backtests')
-    
+
     op.drop_index('idx_strategies_created')
     op.drop_index('idx_strategies_type')
     op.drop_table('strategies')
