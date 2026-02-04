@@ -22,6 +22,8 @@ from schemas.backtest import (
 from database.session import get_db
 from database.crud import BacktestDB
 from websocket.manager import manager
+from security.dependencies import get_current_user
+from security.auth import TokenData
 
 router = APIRouter(prefix="/api/v1/backtests", tags=["backtests"])
 
@@ -98,6 +100,7 @@ def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
 
 @router.post("/run", response_model=dict)
 async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTasks, 
+                      current_user: TokenData = Depends(get_current_user),
                       db: Session = Depends(get_db)):
     """Run a backtest for a strategy."""
     # Create backtest record in database
@@ -122,7 +125,7 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
 
 
 @router.get("/{backtest_id}/status")
-async def get_backtest_status(backtest_id: str, db: Session = Depends(get_db)):
+async def get_backtest_status(backtest_id: str, current_user: TokenData = Depends(get_current_user), db: Session = Depends(get_db)):
     """Check status of a backtest."""
     backtest_db = BacktestDB.get(db, backtest_id)
     

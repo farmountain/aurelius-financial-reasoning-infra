@@ -30,6 +30,8 @@ from schemas.strategy import (
 from database.session import get_db
 from database.crud import StrategyDB
 from websocket.manager import manager
+from security.dependencies import get_current_user
+from security.auth import TokenData
 
 router = APIRouter(prefix="/api/v1/strategies", tags=["strategies"])
 
@@ -45,7 +47,7 @@ def _risk_to_params(risk_level: str) -> dict:
 
 
 @router.post("/generate", response_model=StrategyGenerationResponse)
-async def generate_strategies(request: StrategyGenerationRequest, db: Session = Depends(get_db)):
+async def generate_strategies(request: StrategyGenerationRequest, current_user: TokenData = Depends(get_current_user), db: Session = Depends(get_db)):
     """Generate strategies from natural language goal."""
     try:
         # Parse goal to spec
@@ -89,6 +91,7 @@ async def generate_strategies(request: StrategyGenerationRequest, db: Session = 
             
             # Create response object
             strategy = GeneratedStrategy(
+                id=db_strategy.id,
                 strategy_type=StrategyType(strategy_type),
                 name=strategy_data["name"],
                 description=strategy_data["description"],
@@ -125,6 +128,7 @@ async def generate_strategies(request: StrategyGenerationRequest, db: Session = 
 async def list_strategies(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List all generated strategies."""
@@ -133,6 +137,7 @@ async def list_strategies(
     strategies = []
     for s in strategies_db:
         strategy = GeneratedStrategy(
+            id=s.id,
             strategy_type=StrategyType(s.strategy_type),
             name=s.name,
             description=s.description,

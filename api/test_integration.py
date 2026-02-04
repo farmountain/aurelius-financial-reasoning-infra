@@ -39,7 +39,7 @@ class APITester:
     
     def _make_request(self, method: str, endpoint: str, **kwargs) -> Optional[Dict]:
         """Make HTTP request to API"""
-        url = f"{API_BASE_URL}{endpoint}" if endpoint.startswith("/") else f"{API_V1_URL}{endpoint}"
+        url = f"{API_BASE_URL}{endpoint}" if endpoint.startswith("/") else f"{API_V1_URL}/{endpoint}"
         
         if self.token and "headers" not in kwargs:
             kwargs["headers"] = {"Authorization": f"Bearer {self.token}"}
@@ -137,11 +137,12 @@ class APITester:
         
         result = self._make_request("GET", "/auth/verify")
         
-        passed = result and result["status"] == 200 and result["data"].get("email")
+        email = result["data"].get("user", {}).get("email") if result and result["status"] == 200 else None
+        passed = result and result["status"] == 200 and email
         self._print_test(
             "Token Verification",
             passed,
-            f"Email verified: {result['data'].get('email') if result else 'Error'}"
+            f"Email verified: {email if email else 'Error'}"
         )
         return passed
     
@@ -158,7 +159,7 @@ class APITester:
             "max_strategies": 3
         }
         
-        result = self._make_request("POST", "/strategies/generate", json=payload)
+        result = self._make_request("POST", "/api/v1/strategies/generate", json=payload)
         
         if result and result["status"] == 200:
             data = result["data"]
@@ -185,7 +186,7 @@ class APITester:
             self._print_test("List Strategies", False, "Not authenticated")
             return False
         
-        result = self._make_request("GET", "/strategies/?skip=0&limit=10")
+        result = self._make_request("GET", "/api/v1/strategies/?skip=0&limit=10")
         
         if result and result["status"] == 200:
             data = result["data"]
@@ -212,16 +213,30 @@ class APITester:
             self._print_test("Run Backtest", False, "Not authenticated")
             return False
         
-        # First, get a strategy ID (or use a dummy one for testing)
+        # First, generate a strategy to get a valid strategy ID
+        gen_payload = {
+            "goal": "Create a simple momentum strategy",
+            "risk_preference": "moderate",
+            "max_strategies": 1
+        }
+        
+        gen_result = self._make_request("POST", "/api/v1/strategies/generate", json=gen_payload)
+        if not gen_result or gen_result["status"] != 200:
+            self._print_test("Run Backtest", False, "Failed to generate strategy for backtest")
+            return False
+        
+        strategy_id = gen_result["data"]["strategies"][0]["id"]
+        
+        # Now run backtest with the real strategy ID
         payload = {
-            "strategy_id": "test-strategy-id",
+            "strategy_id": strategy_id,
             "start_date": "2023-01-01",
             "end_date": "2023-12-31",
             "initial_capital": 10000,
             "instruments": ["SPY"]
         }
         
-        result = self._make_request("POST", "/backtests/run", json=payload)
+        result = self._make_request("POST", "/api/v1/backtests/run", json=payload)
         
         if result and result["status"] == 200:
             data = result["data"]
@@ -282,7 +297,7 @@ class APITester:
     # Test 9: Authentication Headers
     def test_auth_headers(self):
         """Test that authentication is required"""
-        result = self._make_request("GET", "/strategies/", headers={})
+        result = self._make_request("GET", "/api/v1/strategies/", headers={})
         # Should fail without token or succeed with 401
         passed = result and result["status"] in [401, 400]
         self._print_test(
