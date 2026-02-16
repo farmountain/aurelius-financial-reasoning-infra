@@ -1,7 +1,9 @@
 """Trust-critical documentation consistency checks."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
+import re
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +16,7 @@ TRUST_DOCS = {
 
 
 ACCEPTANCE_EVIDENCE_PATH = REPO_ROOT / "docs" / "ACCEPTANCE_EVIDENCE_CLOSE_PRODUCT_EXPERIENCE_GAPS.md"
+API_README_PATH = REPO_ROOT / "api" / "README.md"
 
 
 def test_trust_docs_include_evidence_gated_maturity_language():
@@ -37,3 +40,41 @@ def test_trust_docs_reference_acceptance_evidence_artifact():
 
     current = TRUST_DOCS["CURRENT_STATUS.md"].read_text(encoding="utf-8")
     assert "ACCEPTANCE_EVIDENCE_CLOSE_PRODUCT_EXPERIENCE_GAPS.md" in current
+
+
+def test_api_readme_strategy_generate_response_example_is_valid_json_payload():
+    text = API_README_PATH.read_text(encoding="utf-8")
+    match = re.search(
+        r"\*\*Response:\*\*\s*```json\s*(\{.*?\})\s*```",
+        text,
+        flags=re.DOTALL,
+    )
+    assert match, "Expected a JSON response example under the strategy generation response section"
+
+    payload = json.loads(match.group(1))
+    assert isinstance(payload.get("strategies"), list)
+    assert payload["strategies"], "Strategies array in README example must not be empty"
+    assert payload["strategies"][0].get("id"), "Strategy example must include an id"
+
+
+def test_trust_docs_avoid_unqualified_release_ready_language():
+    current_status_text = TRUST_DOCS["CURRENT_STATUS.md"].read_text(encoding="utf-8").lower()
+    project_complete_text = TRUST_DOCS["PROJECT_COMPLETE.md"].read_text(encoding="utf-8").lower()
+
+    assert "ready for integration testing and deployment" not in current_status_text
+    assert "production grade" not in project_complete_text
+
+
+def test_acceptance_evidence_includes_environment_caveat_and_gate_endpoint_outcomes():
+    text = ACCEPTANCE_EVIDENCE_PATH.read_text(encoding="utf-8")
+
+    assert "- environment:" in text.lower(), "Acceptance evidence must record execution environment metadata"
+    gate_lines = [line for line in text.splitlines() if line.startswith("- Gates: `")]
+    assert gate_lines, "Acceptance evidence must include gate endpoint outcome lines"
+
+    latest_gate_json = gate_lines[-1].split("`", 2)[1]
+    payload = json.loads(latest_gate_json)
+    assert "dev_status" in payload
+    assert "crv_status" in payload
+    assert "product_status" in payload
+    assert payload["dev_status"] == 200, "Dev gate endpoint must remain reachable"

@@ -85,26 +85,26 @@ Generate trading strategies from a natural language goal.
         "take_profit": 5.0
       },
       "confidence": 0.9
-
-      Use the returned strategy `id` value as `strategy_id` when invoking backtest, validation, gate, reflexion, and orchestrator routes.
-
-      ---
-
-      ## Authentication and Persistence Policy
-
-      - JWT authentication is required for user-scoped workflow routes.
-      - Core workflow artifacts (strategies, backtests, validations, gate results, reflexion, orchestrator runs) are persisted in PostgreSQL tables.
-      - Include `Authorization: Bearer <token>` for protected endpoints.
-
-      Example:
-
-      ```bash
-      curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/backtests/123/status
-      ```
     }
   ],
   "generation_time_ms": 125.5
 }
+```
+
+Use the returned strategy `id` value as `strategy_id` when invoking backtest, validation, gate, reflexion, and orchestrator routes.
+
+---
+
+## Authentication and Persistence Policy
+
+- JWT authentication is required for user-scoped workflow routes.
+- Core workflow artifacts (strategies, backtests, validations, gate results, reflexion, orchestrator runs) are persisted in PostgreSQL tables.
+- Include `Authorization: Bearer <token>` for protected endpoints.
+
+Example:
+
+```bash
+curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/backtests/123/status
 ```
 
 #### List Strategies

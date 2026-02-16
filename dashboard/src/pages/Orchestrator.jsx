@@ -147,7 +147,7 @@ const Orchestrator = () => {
     setStartingRun(true);
     setError(null);
     try {
-      const strategyId = selectedStrategyId || availableStrategies[0]?.id || runs[0]?.strategy_id;
+      const strategyId = selectedStrategyId || availableStrategies[0]?.id;
       if (!strategyId) {
         throw new Error('No strategy available. Generate one strategy before starting an orchestrator run.');
       }

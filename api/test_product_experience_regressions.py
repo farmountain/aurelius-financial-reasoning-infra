@@ -66,3 +66,10 @@ def test_key_docs_include_reflexion_orchestrator_and_websocket_contract_referenc
     assert "Reflexion" in dash_readme
     assert "Orchestrator" in dash_readme
     assert "WebSocket Contract" in dash_readme
+
+
+def test_orchestrator_start_new_run_does_not_fallback_to_run_history_strategy_id():
+    orchestrator_page = (REPO_ROOT / "dashboard" / "src" / "pages" / "Orchestrator.jsx").read_text(encoding="utf-8")
+
+    assert "runs[0]?.strategy_id" not in orchestrator_page
+    assert "selectedStrategyId || availableStrategies[0]?.id" in orchestrator_page
