@@ -3,7 +3,7 @@ import { strategiesAPI, gatesAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import EmptyState from '../components/EmptyState';
-import { Shield, CheckCircle, XCircle } from 'lucide-react';
+import { Shield, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 
 const Gates = () => {
   const [strategies, setStrategies] = useState([]);
@@ -112,10 +112,25 @@ const Gates = () => {
               </div>
 
               {gateStatus ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <GateCard title="Dev Gate" gate={gateStatus.dev_gate} />
-                  <GateCard title="CRV Gate" gate={gateStatus.crv_gate} />
-                  <GateCard title="Product Gate" gate={gateStatus.product_gate} />
+                <div className="space-y-4">
+                  <ReadinessPanel readiness={gateStatus.readiness} />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <GateCard
+                      title="Dev Gate"
+                      gate={gateStatus.dev_gate}
+                      fallbackPassed={gateStatus.dev_gate_passed}
+                    />
+                    <GateCard
+                      title="CRV Gate"
+                      gate={gateStatus.crv_gate}
+                      fallbackPassed={gateStatus.crv_gate_passed}
+                    />
+                    <GateCard
+                      title="Product Gate"
+                      gate={gateStatus.product_gate}
+                      fallbackPassed={gateStatus.production_ready}
+                    />
+                  </div>
                 </div>
               ) : (
                 <p className="text-gray-400">No gate results found for this strategy</p>
@@ -128,8 +143,12 @@ const Gates = () => {
   );
 };
 
-const GateCard = ({ title, gate }) => {
-  if (!gate || gate.passed === undefined || gate.passed === null) {
+const GateCard = ({ title, gate, fallbackPassed = null }) => {
+  const resolvedPassed = gate?.passed;
+  const hasGateResult = resolvedPassed !== undefined && resolvedPassed !== null;
+  const hasFallback = fallbackPassed !== undefined && fallbackPassed !== null;
+
+  if (!hasGateResult && !hasFallback) {
     return (
       <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
         <h3 className="text-sm font-medium text-gray-300 mb-2">{title}</h3>
@@ -138,22 +157,25 @@ const GateCard = ({ title, gate }) => {
     );
   }
 
+  const passed = hasGateResult ? Boolean(resolvedPassed) : Boolean(fallbackPassed);
+  const gateResults = gate?.results || null;
+
   return (
-    <div className={`p-4 rounded-lg border ${gate.passed ? 'bg-green-900/20 border-green-700' : 'bg-red-900/20 border-red-700'}`}>
+    <div className={`p-4 rounded-lg border ${passed ? 'bg-green-900/20 border-green-700' : 'bg-red-900/20 border-red-700'}`}>
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-medium text-white">{title}</h3>
-        {gate.passed ? (
+        {passed ? (
           <CheckCircle className="w-5 h-5 text-green-400" />
         ) : (
           <XCircle className="w-5 h-5 text-red-400" />
         )}
       </div>
-      <p className={`text-xs ${gate.passed ? 'text-green-400' : 'text-red-400'}`}>
-        {gate.passed ? 'Passed' : 'Failed'}
+      <p className={`text-xs ${passed ? 'text-green-400' : 'text-red-400'}`}>
+        {passed ? 'Passed' : 'Failed'}
       </p>
-      {gate.results && (
+      {gateResults && (
         <div className="mt-2 text-xs text-gray-400">
-          {Object.entries(gate.results).slice(0, 3).map(([key, value]) => (
+          {Object.entries(gateResults).slice(0, 3).map(([key, value]) => (
             <div key={key} className="flex justify-between">
               <span>{key}</span>
               <span>{typeof value === 'number' ? value.toFixed(2) : String(value)}</span>
@@ -161,6 +183,66 @@ const GateCard = ({ title, gate }) => {
           ))}
         </div>
       )}
+    </div>
+  );
+};
+
+const ReadinessPanel = ({ readiness }) => {
+  if (!readiness || typeof readiness !== 'object') {
+    return (
+      <div className="p-4 bg-gray-900/50 rounded-lg border border-gray-700">
+        <div className="flex items-center gap-2 text-gray-300 text-sm">
+          <AlertTriangle className="w-4 h-4" />
+          Promotion readiness not yet available.
+        </div>
+      </div>
+    );
+  }
+
+  const band = readiness.band || 'Unknown';
+  const score = typeof readiness.score === 'number' ? readiness.score.toFixed(1) : 'N/A';
+  const maturity = readiness.maturity_label || 'unknown';
+  const blockers = Array.isArray(readiness.top_blockers) ? readiness.top_blockers : [];
+  const actions = Array.isArray(readiness.next_actions) ? readiness.next_actions : [];
+
+  const bandClasses = {
+    Green: 'bg-green-900/20 border-green-700 text-green-300',
+    Amber: 'bg-yellow-900/20 border-yellow-700 text-yellow-300',
+    Red: 'bg-red-900/20 border-red-700 text-red-300',
+    Unknown: 'bg-gray-900/50 border-gray-700 text-gray-300',
+  };
+
+  return (
+    <div className={`p-4 rounded-lg border ${bandClasses[band] || bandClasses.Unknown}`}>
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+        <div>
+          <p className="text-xs uppercase tracking-wide opacity-80">Promotion Readiness</p>
+          <p className="text-lg font-semibold">{band} ({score})</p>
+        </div>
+        <div className="text-sm opacity-90">
+          <span className="mr-2">Maturity:</span>
+          <span className="font-semibold">{maturity}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+        <div>
+          <p className="font-semibold mb-1">Top blockers</p>
+          {blockers.length === 0 ? (
+            <p className="opacity-80">No blockers</p>
+          ) : (
+            blockers.slice(0, 3).map((item) => <p key={item}>• {item}</p>)
+          )}
+        </div>
+        <div>
+          <p className="font-semibold mb-1">Recommended actions</p>
+          {actions.length === 0 ? (
+            <p className="opacity-80">No immediate action</p>
+          ) : (
+            actions.slice(0, 3).map((item, idx) => <p key={`${idx}-${item}`}>• {item}</p>)
+          )}
+        </div>
+      </div>
     </div>
   );
 };

@@ -78,3 +78,20 @@ def test_acceptance_evidence_includes_environment_caveat_and_gate_endpoint_outco
     assert "crv_status" in payload
     assert "product_status" in payload
     assert payload["dev_status"] == 200, "Dev gate endpoint must remain reachable"
+
+
+def test_readmes_document_readiness_scorecard_formula_and_bands():
+    root_readme = (REPO_ROOT / "README.md").read_text(encoding="utf-8")
+    api_readme = (REPO_ROOT / "api" / "README.md").read_text(encoding="utf-8")
+    dash_readme = (REPO_ROOT / "dashboard" / "README.md").read_text(encoding="utf-8")
+
+    assert "Promotion Readiness Scorecard" in root_readme
+    assert "S = 0.25D + 0.20R + 0.25P + 0.15O + 0.15U" in root_readme
+
+    assert "scorecard_version" in api_readme
+    assert '"green": 85' in api_readme
+    assert '"amber": 70' in api_readme
+
+    assert "Green (>= 85)" in dash_readme
+    assert "Amber (70-84.999)" in dash_readme
+    assert "Red (< 70)" in dash_readme

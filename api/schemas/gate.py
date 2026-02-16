@@ -86,3 +86,12 @@ class GateStatusResponse(BaseModel):
     production_ready: bool = Field(..., description="Overall production readiness")
     execution_mode: Optional[str] = Field(default=None, description="Execution mode for latest run")
     promotion_block_reasons: list[str] = Field(default_factory=list, description="Reasons blocking promotion")
+    maturity_label: Optional[str] = Field(default=None, description="Release maturity label")
+
+    # Legacy-compatible gate summaries for existing dashboard surfaces
+    dev_gate: Optional[dict] = Field(default=None, description="Latest dev gate summary")
+    crv_gate: Optional[dict] = Field(default=None, description="Latest CRV gate summary")
+    product_gate: Optional[dict] = Field(default=None, description="Latest product gate summary")
+
+    # Canonical readiness payload
+    readiness: Optional[dict] = Field(default=None, description="Promotion-readiness scorecard payload")

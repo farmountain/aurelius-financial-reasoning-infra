@@ -311,6 +311,52 @@ POST /api/v1/gates/dev-gate
 
 Run development gate checks (type checking, linting, unit tests, determinism).
 
+#### Promotion Readiness Scorecard
+
+Gate status responses expose a canonical readiness payload used by both API and dashboard decision views.
+
+Score formula:
+
+$S = w_1 D + w_2 R + w_3 P + w_4 O + w_5 U$
+
+Default weights (`scorecard_version=v1`):
+- `D=0.25` (determinism/parity confidence)
+- `R=0.20` (risk/validation confidence)
+- `P=0.25` (policy/governance compliance)
+- `O=0.15` (operational reliability)
+- `U=0.15` (decision interpretability)
+
+Decision bands:
+- `Green`: `S >= 85` and no hard blockers
+- `Amber`: `70 <= S < 85` and no hard blockers
+- `Red`: `S < 70` or any hard blocker
+
+Threshold payload representation:
+
+```json
+{
+  "scorecard_version": "v1",
+  "thresholds": {
+    "green": 85,
+    "amber": 70
+  }
+}
+```
+
+Hard blockers (non-compensatory) include missing run identity, parity failures, and lineage/policy blockers.
+
+`GET /api/v1/gates/{strategy_id}/status` now returns:
+- legacy compatibility fields (`dev_gate_passed`, `crv_gate_passed`, `production_ready`, etc.)
+- gate summaries (`dev_gate`, `crv_gate`, `product_gate`)
+- canonical `readiness` payload with score, band, blockers, actions, transition, and operational context.
+
+**KPI Events**:
+The readiness payload includes structured KPI events for operational monitoring:
+- `decision_latency_ms`: time to compute readiness decision (null when not measured)
+- `false_promotion_proxy`: binary indicator (1 if hard-blocked despite green score, else 0)
+- `reproducibility_pass`: binary indicator (1 if parity/identity complete, else 0)
+- `onboarding_reliability`: binary indicator (1 if startup healthy, else 0)
+
 **Request:**
 ```json
 {

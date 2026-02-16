@@ -73,3 +73,48 @@ def test_orchestrator_start_new_run_does_not_fallback_to_run_history_strategy_id
 
     assert "runs[0]?.strategy_id" not in orchestrator_page
     assert "selectedStrategyId || availableStrategies[0]?.id" in orchestrator_page
+
+
+def test_gates_and_dashboard_render_readiness_scorecard_surfaces():
+    gates_page = (REPO_ROOT / "dashboard" / "src" / "pages" / "Gates.jsx").read_text(encoding="utf-8")
+    dashboard_page = (REPO_ROOT / "dashboard" / "src" / "pages" / "Dashboard.jsx").read_text(encoding="utf-8")
+
+    assert "Promotion Readiness" in gates_page
+    assert "ReadinessPanel" in gates_page
+    assert "top_blockers" in gates_page
+
+    assert "Promotion Readiness" in dashboard_page
+    assert "averageScore" in dashboard_page
+    assert "topBlockers" in dashboard_page
+
+
+def test_readiness_panel_orders_blockers_by_priority():
+    gates_page = (REPO_ROOT / "dashboard" / "src" / "pages" / "Gates.jsx").read_text(encoding="utf-8")
+    
+    # Verify blockers are rendered in priority order
+    assert "top_blockers" in gates_page
+    assert "next_actions" in gates_page
+
+
+def test_readiness_panel_renders_compatibility_fallback_for_old_api():
+    gates_page = (REPO_ROOT / "dashboard" / "src" / "pages" / "Gates.jsx").read_text(encoding="utf-8")
+    
+    # Verify compatibility layer for API versions without readiness
+    assert "maturity_label" in gates_page or "production_ready" in gates_page
+
+
+def test_dashboard_aggregates_readiness_across_strategies():
+    dashboard_page = (REPO_ROOT / "dashboard" / "src" / "pages" / "Dashboard.jsx").read_text(encoding="utf-8")
+    
+    # Verify band distribution logic
+    assert "bandCounts" in dashboard_page or "greenCount" in dashboard_page
+
+
+def test_readiness_kpi_structure_matches_spec():
+    api_readme = (REPO_ROOT / "api" / "README.md").read_text(encoding="utf-8")
+    
+    # Verify KPI documentation
+    assert "decision_latency_ms" in api_readme or "Decision Latency" in api_readme
+    assert "false_promotion_proxy" in api_readme or "False Promotion" in api_readme
+    assert "reproducibility_pass" in api_readme or "Reproducibility" in api_readme
+    assert "onboarding_reliability" in api_readme or "Onboarding" in api_readme

@@ -2,8 +2,10 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 import sys
 import os
+from pathlib import Path
 
 # Add paths for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -18,15 +20,56 @@ from schemas.gate import (
 )
 from database.session import get_db
 from database.crud import GateResultDB, BacktestDB, ValidationDB, StrategyDB
-from database.models import Backtest, Validation
+from database.models import Backtest, Validation, GateResult
 from services.governance import check_lineage_completeness, build_governance_report
 from services.release_gates import evaluate_release_gate
-import os
+from services.promotion_readiness import ReadinessSignals, build_readiness_payload, parse_acceptance_evidence_metadata
 from config import settings
 from security.dependencies import get_current_user
 from security.auth import TokenData
 
 router = APIRouter(prefix="/api/v1/gates", tags=["gates"])
+REPO_ROOT = Path(__file__).resolve().parents[2]
+ACCEPTANCE_EVIDENCE_PATH = REPO_ROOT / "docs" / "ACCEPTANCE_EVIDENCE_CLOSE_PRODUCT_EXPERIENCE_GAPS.md"
+
+
+def _runtime_health_snapshot(db: Session) -> tuple[str, list[str]]:
+    reasons: list[str] = []
+
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as exc:
+        reasons.append(f"database_disconnected:{exc}")
+
+    try:
+        from cache import cache
+
+        stats = cache.get_stats()
+        if not stats.get("enabled", False):
+            reasons.append("cache_disabled")
+    except Exception as exc:
+        reasons.append(f"cache_unavailable:{exc}")
+
+    return ("healthy" if len(reasons) == 0 else "degraded"), reasons
+
+
+def _risk_metrics_complete(backtest: Backtest | None) -> bool:
+    if not backtest or not isinstance(backtest.metrics, dict):
+        return False
+    metrics = backtest.metrics
+    required = ["sharpe_ratio", "max_drawdown", "total_return"]
+    return all(metrics.get(key) is not None for key in required)
+
+
+def _build_gate_summary(record) -> dict | None:
+    if record is None:
+        return None
+    results = record.results if isinstance(record.results, dict) else {}
+    return {
+        "passed": bool(record.passed),
+        "timestamp": record.timestamp.isoformat() if getattr(record, "timestamp", None) else None,
+        "results": results,
+    }
 
 
 def _resolve_backtest(request: GateCheckRequest, db: Session) -> Backtest | None:
@@ -230,6 +273,43 @@ async def run_product_gate(
     }
     release_gate_passed, release_block_reasons, maturity_label = evaluate_release_gate(release_evidence)
 
+    startup_status, startup_reasons = _runtime_health_snapshot(db)
+    evidence_meta = parse_acceptance_evidence_metadata(ACCEPTANCE_EVIDENCE_PATH)
+
+    # previous product scorecard context (if available)
+    previous_scorecard = None
+    # Retrieve the second-most-recent product gate record directly for transition deltas
+    prior_two = db.query(GateResult).filter(
+        GateResult.strategy_id == request.strategy_id,
+        GateResult.gate_type == "product"
+    ).order_by(GateResult.timestamp.desc()).limit(2).all()
+    if len(prior_two) > 1 and isinstance(prior_two[1].results, dict):
+        previous_scorecard = prior_two[1].results.get("readiness") if isinstance(prior_two[1].results.get("readiness"), dict) else None
+
+    signals = ReadinessSignals(
+        run_identity_present=bool((backtest.metrics or {}).get("run_identity") if backtest and isinstance(backtest.metrics, dict) else False),
+        parity_checked=not ("missing_replay_check" in parity_block_reasons),
+        parity_passed=parity_passed,
+        validation_passed=validation_passed,
+        crv_available=backtest is not None and isinstance(backtest.metrics, dict),
+        risk_metrics_complete=_risk_metrics_complete(backtest),
+        policy_block_reasons=release_block_reasons,
+        lineage_complete=lineage_passed,
+        startup_status=startup_status,
+        startup_reasons=startup_reasons,
+        evidence_stale=bool(evidence_meta.get("evidence_stale", True)),
+        environment_caveat=evidence_meta.get("environment_caveat"),
+        evidence_classification=evidence_meta.get("classification"),
+        evidence_timestamp=evidence_meta.get("latest_timestamp"),
+        contract_mismatch=False,
+        maturity_label_visible=True,
+    )
+    readiness = build_readiness_payload(
+        strategy_id=request.strategy_id,
+        signals=signals,
+        previous_scorecard=previous_scorecard,
+    )
+
     recommendation = (
         "✅ Ready for production deployment" if production_ready
         else "❌ Not ready for production - see gate results"
@@ -261,6 +341,7 @@ async def run_product_gate(
                                "maturity_label": maturity_label,
                                "evidence": release_evidence,
                            },
+                           "readiness": readiness,
                            **result.dict(),
                        })
 
@@ -280,9 +361,9 @@ async def get_gate_status(
     crv_gate = GateResultDB.get_latest(db, strategy_id, "crv")
     product_gate = GateResultDB.get_product_gate(db, strategy_id)
 
-    dev_passed = dev_gate.passed if dev_gate else False
-    crv_passed = crv_gate.passed if crv_gate else False
-    prod_ready = product_gate.production_ready if product_gate else False
+    dev_passed = bool(dev_gate.passed) if dev_gate else False
+    crv_passed = bool(crv_gate.passed) if crv_gate else False
+    prod_ready = bool(product_gate.production_ready) if product_gate else False
     latest_validation = db.query(Validation).filter(
         Validation.strategy_id == strategy_id,
         Validation.status == "completed"
@@ -297,6 +378,7 @@ async def get_gate_status(
     release_gate = product_results.get("release_gate") if isinstance(product_results.get("release_gate"), dict) else {}
     if isinstance(release_gate.get("block_reasons"), list):
         promotion_block_reasons.extend(release_gate.get("block_reasons", []))
+    promotion_block_reasons = list(dict.fromkeys(promotion_block_reasons))
 
     latest_backtest = db.query(Backtest).filter(
         Backtest.strategy_id == strategy_id,
@@ -306,6 +388,49 @@ async def get_gate_status(
     if latest_backtest and isinstance(latest_backtest.metrics, dict):
         execution_mode = latest_backtest.metrics.get("execution_mode")
 
+    startup_status, startup_reasons = _runtime_health_snapshot(db)
+    evidence_meta = parse_acceptance_evidence_metadata(ACCEPTANCE_EVIDENCE_PATH)
+
+    previous_scorecard = None
+    prior_two = db.query(GateResult).filter(
+        GateResult.strategy_id == strategy_id,
+        GateResult.gate_type == "product"
+    ).order_by(GateResult.timestamp.desc()).limit(2).all()
+    if len(prior_two) > 1 and isinstance(prior_two[1].results, dict):
+        previous_scorecard = prior_two[1].results.get("readiness") if isinstance(prior_two[1].results.get("readiness"), dict) else None
+
+    readiness = product_results.get("readiness") if isinstance(product_results.get("readiness"), dict) else None
+    if readiness is None:
+        signals = ReadinessSignals(
+            run_identity_present=bool((latest_backtest.metrics or {}).get("run_identity") if latest_backtest and isinstance(latest_backtest.metrics, dict) else False),
+            parity_checked=not ("missing_replay_check" in promotion_block_reasons),
+            parity_passed=("parity_check_failed" not in promotion_block_reasons),
+            validation_passed=validation_passed,
+            crv_available=latest_backtest is not None and isinstance(latest_backtest.metrics, dict),
+            risk_metrics_complete=_risk_metrics_complete(latest_backtest),
+            policy_block_reasons=promotion_block_reasons,
+            lineage_complete=not any(reason.startswith("missing_") and reason != "missing_replay_check" for reason in promotion_block_reasons),
+            startup_status=startup_status,
+            startup_reasons=startup_reasons,
+            evidence_stale=bool(evidence_meta.get("evidence_stale", True)),
+            environment_caveat=evidence_meta.get("environment_caveat"),
+            evidence_classification=evidence_meta.get("classification"),
+            evidence_timestamp=evidence_meta.get("latest_timestamp"),
+            contract_mismatch=False,
+            maturity_label_visible=True,
+        )
+        readiness = build_readiness_payload(
+            strategy_id=strategy_id,
+            signals=signals,
+            previous_scorecard=previous_scorecard,
+        )
+
+    maturity_label = None
+    if isinstance(readiness, dict):
+        maturity_label = readiness.get("maturity_label")
+    if not maturity_label and isinstance(release_gate, dict):
+        maturity_label = release_gate.get("maturity_label")
+
     return GateStatusResponse(
         strategy_id=strategy_id,
         dev_gate_passed=dev_passed,
@@ -314,4 +439,9 @@ async def get_gate_status(
         production_ready=prod_ready,
         execution_mode=execution_mode,
         promotion_block_reasons=promotion_block_reasons,
+        maturity_label=maturity_label,
+        dev_gate=_build_gate_summary(dev_gate),
+        crv_gate=_build_gate_summary(crv_gate),
+        product_gate=_build_gate_summary(product_gate),
+        readiness=readiness,
     )

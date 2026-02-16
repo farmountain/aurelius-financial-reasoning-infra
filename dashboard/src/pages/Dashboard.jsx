@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { strategiesAPI, backtestsAPI, gatesAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
-import { TrendingUp, TrendingDown, CheckCircle, XCircle, Layers, Activity } from 'lucide-react';
+import { CheckCircle, XCircle, Layers, Activity, AlertTriangle } from 'lucide-react';
 import { useRealtimeDashboard } from '../hooks/useRealtime';
 
 const Dashboard = () => {
@@ -12,6 +12,7 @@ const Dashboard = () => {
     totalStrategies: 0,
     recentBacktests: [],
     gateStats: { passed: 0, failed: 0, total: 0 },
+    readiness: { averageScore: 0, bands: { Green: 0, Amber: 0, Red: 0 }, topBlockers: [] },
   });
   const realtimeStats = useRealtimeDashboard();
 
@@ -45,6 +46,10 @@ const Dashboard = () => {
 
       let passed = 0;
       let failed = 0;
+      const readinessScores = [];
+      const bandCounts = { Green: 0, Amber: 0, Red: 0 };
+      const blockerCounts = new Map();
+
       gateStatuses.forEach((result) => {
         if (result.status !== 'fulfilled') {
           return;
@@ -56,7 +61,29 @@ const Dashboard = () => {
         } else {
           failed += 1;
         }
+
+        const readiness = payload.readiness || null;
+        if (readiness && typeof readiness.score === 'number') {
+          readinessScores.push(readiness.score);
+        }
+        const band = readiness?.band;
+        if (bandCounts[band] !== undefined) {
+          bandCounts[band] += 1;
+        }
+        const blockers = Array.isArray(readiness?.top_blockers) ? readiness.top_blockers : [];
+        blockers.slice(0, 3).forEach((blocker) => {
+          blockerCounts.set(blocker, (blockerCounts.get(blocker) || 0) + 1);
+        });
       });
+
+      const averageScore = readinessScores.length > 0
+        ? readinessScores.reduce((acc, value) => acc + value, 0) / readinessScores.length
+        : 0;
+
+      const topBlockers = Array.from(blockerCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 3)
+        .map(([name]) => name);
 
       setStats({
         totalStrategies: strategies.length,
@@ -65,6 +92,11 @@ const Dashboard = () => {
           passed,
           failed,
           total: gateStatuses.filter((result) => result.status === 'fulfilled').length,
+        },
+        readiness: {
+          averageScore,
+          bands: bandCounts,
+          topBlockers,
         },
       });
     } catch (err) {
@@ -135,6 +167,34 @@ const Dashboard = () => {
                 <BacktestRow key={backtest.id} backtest={backtest} />
               ))}
             </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-gray-800 rounded-lg border border-gray-700 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-white">Promotion Readiness</h2>
+            <p className="text-xs text-gray-400">Canonical scorecard summary across strategies</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-gray-400">Average Score</p>
+            <p className="text-2xl font-bold text-white">{stats.readiness.averageScore.toFixed(1)}</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4 text-sm">
+          <div className="p-3 rounded border border-green-700 bg-green-900/20 text-green-300">Green: {stats.readiness.bands.Green}</div>
+          <div className="p-3 rounded border border-yellow-700 bg-yellow-900/20 text-yellow-300">Amber: {stats.readiness.bands.Amber}</div>
+          <div className="p-3 rounded border border-red-700 bg-red-900/20 text-red-300">Red: {stats.readiness.bands.Red}</div>
+        </div>
+
+        <div className="text-xs text-gray-300">
+          <p className="font-semibold mb-2 flex items-center gap-2"><AlertTriangle className="w-4 h-4" />Top blockers</p>
+          {stats.readiness.topBlockers.length === 0 ? (
+            <p className="text-gray-400">No blockers currently surfaced.</p>
+          ) : (
+            stats.readiness.topBlockers.map((item) => <p key={item}>• {item}</p>)
           )}
         </div>
       </div>

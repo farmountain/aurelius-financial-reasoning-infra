@@ -178,6 +178,33 @@ python examples/backtest_sp500_weekly_5pct_alpaca.py \
 - `experimental`: Advanced analytics surfaces whose operational readiness is environment-dependent.
 - `historical snapshot`: Phase completion reports that describe milestone delivery but do not override current evidence-gated release status.
 
+### Promotion Readiness Scorecard (Decision Contract)
+
+Promotion readiness is represented as a canonical scorecard:
+
+$S = w_1 D + w_2 R + w_3 P + w_4 O + w_5 U$
+
+Expanded with default v1 weights:
+
+$S = 0.25D + 0.20R + 0.25P + 0.15O + 0.15U$
+
+Where each component is normalized to `[0,100]`:
+- `D`: Determinism/Parity confidence
+- `R`: Risk/Validation confidence
+- `P`: Policy/Governance compliance
+- `O`: Operational reliability
+- `U`: User interpretability/decision clarity
+
+Default weight profile (`v1`):
+- `w1=0.25`, `w2=0.20`, `w3=0.25`, `w4=0.15`, `w5=0.15`
+
+Decision bands:
+- `Green`: `S >= 85` and no hard blockers
+- `Amber`: `70 <= S < 85` and no hard blockers
+- `Red`: `S < 70` or any hard blocker
+
+Hard blockers are non-compensatory (for example missing run identity, parity failure, lineage/policy blockers): a strategy cannot be promoted even with a high weighted score.
+
 ### API Highlights
 - Strategy generation and listing
 - Backtest execution and status (with optional deterministic `seed` and `data_source` inputs)

@@ -9,6 +9,12 @@ Web dashboard for the AURELIUS Quant Reasoning Model.
 - **Backtest Analysis**: Visualize backtest results with interactive charts
 - **Validation Results**: View walk-forward validation analysis
 - **Gate Status**: Monitor dev, CRV, and product gate checks
+- **Promotion Readiness Scorecard**: Unified score, band, blockers, and recommended actions for promotion decisions
+
+Promotion readiness bands surfaced in the dashboard:
+- Green (>= 85): promote if no hard blockers
+- Amber (70-84.999): cautionary promote/no-promote decision with operator review
+- Red (< 70): do not promote
 - **Reflexion Loop**: Track strategy improvement iterations and run new iterations
 - **Orchestrator**: Start and monitor persisted end-to-end pipeline runs
 
@@ -127,6 +133,19 @@ The dashboard communicates with the REST API through the `api.js` service module
 - [x] Backtest execution form
 - [x] Real-time updates (WebSocket contract aligned)
 - [x] Authentication
+- [x] Canonical promotion-readiness panel (score/band/blockers/actions)
+
+## Promotion Readiness Decision Semantics
+
+Dashboard decision surfaces consume canonical readiness output from gate status APIs:
+
+$S = w_1 D + w_2 R + w_3 P + w_4 O + w_5 U$
+
+- `Green`: `S >= 85` and no hard blockers
+- `Amber`: `70 <= S < 85` and no hard blockers
+- `Red`: `S < 70` or any hard blocker
+
+Hard blockers are non-compensatory and override weighted score bands.
 
 ## WebSocket Contract
 

@@ -248,6 +248,143 @@ def test_websocket_contract_events_match_dashboard_contract_file():
     assert SUPPORTED_EVENTS == events
 
 
+def test_readiness_payload_contract_stability():
+    """Verify readiness payload shape matches documented contract."""
+    from services.promotion_readiness import ReadinessSignals, build_readiness_payload
+
+    signals = ReadinessSignals(
+        run_identity_present=True,
+        parity_checked=True,
+        parity_passed=True,
+        validation_passed=True,
+        crv_available=True,
+        risk_metrics_complete=True,
+        policy_block_reasons=[],
+        lineage_complete=True,
+        startup_status="healthy",
+        startup_reasons=[],
+        evidence_stale=False,
+        environment_caveat=None,
+        evidence_classification="contract-valid-success",
+        evidence_timestamp="2026-02-16T12:00:00+00:00",
+        contract_mismatch=False,
+        maturity_label_visible=True,
+    )
+    
+    payload = build_readiness_payload(strategy_id="s-test", signals=signals)
+    
+    # Top-level required fields
+    assert "strategy_id" in payload
+    assert "scorecard_version" in payload
+    assert "weights" in payload
+    assert "thresholds" in payload
+    assert "components" in payload
+    assert "score" in payload
+    assert "band" in payload
+    assert "blocked" in payload
+    assert "hard_blockers" in payload
+    assert "top_blockers" in payload
+    assert "next_actions" in payload
+    assert "warnings" in payload
+    assert "maturity_label" in payload
+    assert "transition" in payload
+    assert "operational_context" in payload
+    assert "kpi_events" in payload
+    assert "evaluated_at" in payload
+    
+    # Component shape
+    assert set(payload["components"].keys()) == {"D", "R", "P", "O", "U"}
+    
+    # Transition shape
+    assert "previous_score" in payload["transition"]
+    assert "score_delta" in payload["transition"]
+    assert "component_delta" in payload["transition"]
+    assert "changed_components" in payload["transition"]
+    
+    # Operational context includes evidence metadata
+    assert "evidence_classification" in payload["operational_context"]
+    assert "evidence_timestamp" in payload["operational_context"]
+    assert "evidence_stale" in payload["operational_context"]
+    assert "environment_caveat" in payload["operational_context"]
+    
+    # KPI events shape
+    assert "decision_latency_ms" in payload["kpi_events"]
+    assert "false_promotion_proxy" in payload["kpi_events"]
+    assert "reproducibility_pass" in payload["kpi_events"]
+    assert "onboarding_reliability" in payload["kpi_events"]
+
+
+def test_readiness_hard_blocker_precedence():
+    """Verify hard blockers force Red band regardless of score."""
+    from services.promotion_readiness import ReadinessSignals, build_readiness_payload
+
+    signals = ReadinessSignals(
+        run_identity_present=False,  # hard blocker
+        parity_checked=True,
+        parity_passed=True,
+        validation_passed=True,
+        crv_available=True,
+        risk_metrics_complete=True,
+        policy_block_reasons=[],
+        lineage_complete=True,
+        startup_status="healthy",
+        startup_reasons=[],
+        evidence_stale=False,
+        environment_caveat=None,
+        evidence_classification=None,
+        evidence_timestamp=None,
+        contract_mismatch=False,
+        maturity_label_visible=True,
+    )
+    
+    payload = build_readiness_payload(strategy_id="s-test", signals=signals)
+    
+    assert payload["blocked"] is True
+    assert payload["band"] == "Red"
+    assert "missing_run_identity" in payload["hard_blockers"]
+    assert payload["maturity_label"] == "experimental"
+
+
+def test_evidence_parser_classifies_gate_path_states():
+    """Verify acceptance evidence parser classifies gate response patterns."""
+    from services.promotion_readiness import parse_acceptance_evidence_metadata
+    from pathlib import Path
+    import tempfile
+    import os
+    
+    # Test contract-valid-success
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".md") as f:
+        f.write("- Timestamp (UTC): `2026-02-16T12:00:00Z`\n")
+        f.write("- Environment: `test`\n")
+        f.write('- Gates: `{"dev_status": 200, "crv_status": 200, "product_status": 200}`\n')
+        fname = f.name
+    meta = parse_acceptance_evidence_metadata(Path(fname))
+    assert meta["classification"] == "contract-valid-success"
+    assert meta["environment_caveat"] is None
+    os.unlink(fname)
+    
+    # Test contract-valid-failure
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".md") as f:
+        f.write("- Timestamp (UTC): `2026-02-16T12:00:00Z`\n")
+        f.write("- Environment: `test`\n")
+        f.write('- Gates: `{"dev_status": 200, "crv_status": 404, "product_status": 422}`\n')
+        fname = f.name
+    meta = parse_acceptance_evidence_metadata(Path(fname))
+    assert meta["classification"] == "contract-valid-failure"
+    os.unlink(fname)
+    
+    # Test contract-invalid-failure
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".md") as f:
+        f.write("- Timestamp (UTC): `2026-02-16T12:00:00Z`\n")
+        f.write("- Environment: `test`\n")
+        f.write('- Gates: `{"dev_status": 500, "crv_status": 200, "product_status": 200}`\n')
+        fname = f.name
+    meta = parse_acceptance_evidence_metadata(Path(fname))
+    assert meta["classification"] == "contract-invalid-failure"
+    assert meta["environment_caveat"] == "contract_invalid_gate_path"
+    os.unlink(fname)
+
+
 def test_realtime_consumers_use_only_canonical_event_names():
     root = Path(__file__).resolve().parents[1]
     realtime_hook = (root / "dashboard" / "src" / "hooks" / "useRealtime.js").read_text(encoding="utf-8")
@@ -267,3 +404,17 @@ def test_orchestrator_and_reflexion_surfaces_consume_realtime_events():
     assert "subscribe('orchestrator_run_created'" in orchestrator_page
     assert "subscribe('orchestrator_stage_updated'" in orchestrator_page
     assert "useRealtimeReflexionEvents" in reflexion_page
+
+
+def test_gate_status_contract_exposes_canonical_readiness_and_compatibility_fields():
+    from api.schemas.gate import GateStatusResponse
+
+    fields = GateStatusResponse.model_fields
+    assert "readiness" in fields
+    assert "maturity_label" in fields
+    assert "dev_gate" in fields
+    assert "crv_gate" in fields
+    assert "product_gate" in fields
+    assert "dev_gate_passed" in fields
+    assert "crv_gate_passed" in fields
+    assert "production_ready" in fields
