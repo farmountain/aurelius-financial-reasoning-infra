@@ -1,7 +1,3 @@
-## Purpose
-
-Define deterministic engine-backed production execution and parity controls across interfaces.
-
 ## Requirements
 
 ### Requirement: Production API execution SHALL be engine-backed
@@ -20,7 +16,7 @@ All production backtest, validation, gate, and optimization API routes SHALL exe
 - **THEN** returned strategy candidates are derived from goal/risk inputs and MUST NOT rely solely on fixed static strategy lists with mock timing semantics
 
 ### Requirement: Result parity SHALL be measurable across interfaces
-For the same canonical run identity (`spec_hash`, `data_hash`, `seed`, `engine_version`), CLI and API outputs SHALL match within configured metric tolerances.
+For the same canonical run identity (`spec_hash`, `data_hash`, `seed`, `engine_version`), CLI and API outputs SHALL match within configured metric tolerances and SHALL contribute to readiness score inputs.
 
 #### Scenario: CLI/API parity check passes
 - **WHEN** parity validation is executed for a canonical run identity
@@ -37,3 +33,7 @@ For the same canonical run identity (`spec_hash`, `data_hash`, `seed`, `engine_v
 #### Scenario: Acceptance evidence reflects current gate-path behavior
 - **WHEN** release readiness is evaluated using acceptance evidence
 - **THEN** gate-path outcomes in evidence are current and interpreted with explicit environment caveats before production claims are made
+
+#### Scenario: Operational reliability contributes to readiness
+- **WHEN** startup/dependency health is degraded during readiness evaluation
+- **THEN** readiness operational component is penalized with explicit root-cause metadata

@@ -1,7 +1,3 @@
-## Purpose
-
-Define quality standards for release-facing acceptance evidence so outcomes are current, environment-explicit, and interpretable for trust decisions.
-
 ## Requirements
 
 ### Requirement: Release-facing acceptance evidence SHALL be current and environment-explicit
@@ -15,6 +11,10 @@ Release-facing acceptance evidence artifacts SHALL include recent run timestamps
 - **WHEN** release validation finds no recent acceptance entry for the current change window
 - **THEN** release validation fails and requests a refreshed acceptance run
 
+#### Scenario: Evidence freshness contributes to operational confidence
+- **WHEN** readiness scoring consumes evidence quality inputs
+- **THEN** stale or missing evidence reduces operational confidence component with explicit penalty reason
+
 ### Requirement: Gate-path outcomes SHALL be classified for trust interpretation
 Acceptance evidence SHALL classify gate-path outcomes as contract-valid success, contract-valid failure, or contract-invalid failure.
 
@@ -25,3 +25,7 @@ Acceptance evidence SHALL classify gate-path outcomes as contract-valid success,
 #### Scenario: Gate endpoint returns contract-invalid failure
 - **WHEN** gate endpoints return route-not-found or internal errors in the acceptance path
 - **THEN** release validation marks evidence as blocking until corrected or superseded by a clean run
+
+#### Scenario: Evidence interpretation is surfaced to operators
+- **WHEN** users inspect promotion readiness details
+- **THEN** the system exposes environment caveats and gate-path classification used in readiness interpretation
