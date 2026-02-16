@@ -1,4 +1,4 @@
-# AURELIUS Quant Reasoning Model
+# AURELIUS Quant Reasoning Model Trading Platform
 
 AURELIUS is a quantitative research and strategy-evaluation platform that combines:
 - A deterministic Rust backtesting engine
@@ -64,7 +64,9 @@ AURELIUS addresses that with:
 ### 4) Product Surface
 - REST API for strategy lifecycle and backtest operations
 - React dashboard for monitoring and control
-- WebSocket support for real-time updates
+- WebSocket support for real-time updates with canonical envelope/events
+- Reflexion iteration history and run endpoints
+- Orchestrator persisted pipeline runs and stage transitions
 - PostgreSQL persistence and Redis caching support
 
 ---
@@ -170,10 +172,17 @@ python examples/backtest_sp500_weekly_5pct_alpaca.py \
 
 ## API and Dashboard
 
+### Capability Maturity Labels (Release-Facing)
+
+- `validated`: Strategy generation, backtests, validation, gates, Reflexion, Orchestrator, auth-protected workflow APIs, and canonical WebSocket contract.
+- `experimental`: Advanced analytics surfaces whose operational readiness is environment-dependent.
+- `historical snapshot`: Phase completion reports that describe milestone delivery but do not override current evidence-gated release status.
+
 ### API Highlights
 - Strategy generation and listing
-- Backtest execution and status
+- Backtest execution and status (with optional deterministic `seed` and `data_source` inputs)
 - Validation and gate endpoints
+- Reflexion and orchestrator workflow endpoints
 - Authentication and authorization support
 
 Reference: [api/README.md](api/README.md)

@@ -45,6 +45,8 @@ class Backtest(Base):
     end_date = Column(String(10), nullable=False)
     initial_capital = Column(Float, nullable=False)
     instruments = Column(JSON, nullable=False)
+    seed = Column(Integer, nullable=False, default=42)
+    data_source = Column(String(255), nullable=False, default="default")
 
     # Status
     status = Column(String(20), default="pending")  # pending, running, completed, failed
@@ -135,3 +137,44 @@ class GateResult(Base):
 
     def __repr__(self):
         return f"<GateResult {self.id}: {self.gate_type} - {'PASS' if self.passed else 'FAIL'}>"
+
+
+class ReflexionIteration(Base):
+    """Reflexion iteration history per strategy."""
+    __tablename__ = "reflexion_iterations"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    strategy_id = Column(String(36), ForeignKey("strategies.id"), nullable=False, index=True)
+    iteration_num = Column(Integer, nullable=False)
+    improvement_score = Column(Float, nullable=False, default=0.0)
+    feedback = Column(Text)
+    improvements = Column(JSON, nullable=False, default=list)
+    context_data = Column("metadata", JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    strategy = relationship("Strategy")
+
+    def __repr__(self):
+        return f"<ReflexionIteration {self.id}: strategy={self.strategy_id} iteration={self.iteration_num}>"
+
+
+class OrchestratorRun(Base):
+    """Persisted end-to-end orchestrator runs."""
+    __tablename__ = "orchestrator_runs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    strategy_id = Column(String(36), ForeignKey("strategies.id"), nullable=True, index=True)
+    status = Column(String(20), nullable=False, default="pending")
+    current_stage = Column(String(50), nullable=True)
+    stages = Column(JSON, nullable=False, default=dict)
+    inputs = Column(JSON, nullable=False, default=dict)
+    outputs = Column(JSON, nullable=False, default=dict)
+    error_message = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime)
+
+    strategy = relationship("Strategy")
+
+    def __repr__(self):
+        return f"<OrchestratorRun {self.id}: status={self.status} stage={self.current_stage}>"

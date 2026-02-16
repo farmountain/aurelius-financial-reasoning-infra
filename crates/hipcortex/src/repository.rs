@@ -223,6 +223,14 @@ mod tests {
                 start_timestamp: 0,
                 end_timestamp: 1000,
                 bar_count: 10,
+                provider: "test-provider".to_string(),
+                venue_class: "equities".to_string(),
+                timezone_calendar: "UTC/XNYS".to_string(),
+                adjustment_policy: "split_dividend_adjusted".to_string(),
+                fidelity_tier: schema::FidelityTier::Tier1Bar,
+                latency_class: schema::LatencyClass::EndOfDay,
+                quality_flags: vec![],
+                transform_lineage: vec![],
             },
         });
 

@@ -1,15 +1,21 @@
 import { useState, useEffect } from 'react';
-import { orchestratorAPI } from '../services/api';
+import { orchestratorAPI, strategiesAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import EmptyState from '../components/EmptyState';
 import { Activity } from 'lucide-react';
+import { useWebSocket } from '../context/WebSocketContext';
 
 const Orchestrator = () => {
   const [runs, setRuns] = useState([]);
   const [selectedRun, setSelectedRun] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [startingRun, setStartingRun] = useState(false);
+  const [availableStrategies, setAvailableStrategies] = useState([]);
+  const [selectedStrategyId, setSelectedStrategyId] = useState('');
+  const [isGeneratingStrategy, setIsGeneratingStrategy] = useState(false);
+  const { subscribe } = useWebSocket();
 
   useEffect(() => {
     loadOrchestrationRuns();
@@ -21,13 +27,150 @@ const Orchestrator = () => {
   const loadOrchestrationRuns = async () => {
     setError(null);
     try {
-      // In a real implementation, this would fetch from /api/orchestrator/runs
-      // For now, we simulate the data structure
-      setRuns([]);
+      const data = await orchestratorAPI.list(100, 0);
+      setRuns(Array.isArray(data) ? data : []);
+      if (!selectedRun && Array.isArray(data) && data.length > 0) {
+        setSelectedRun(data[0]);
+      }
     } catch (err) {
       setError(err.message || 'Failed to load orchestrator runs');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStrategies = async () => {
+    try {
+      const data = await strategiesAPI.list(100, 0);
+      const list = Array.isArray(data) ? data : [];
+      setAvailableStrategies(list);
+
+      if (!selectedStrategyId && list.length > 0) {
+        setSelectedStrategyId(list[0].id);
+      }
+    } catch (err) {
+      setAvailableStrategies([]);
+    }
+  };
+
+  useEffect(() => {
+    loadStrategies();
+  }, []);
+
+  useEffect(() => {
+    const unsubscribeCreated = subscribe('orchestrator_run_created', () => {
+      loadOrchestrationRuns();
+    });
+
+    const unsubscribeStage = subscribe('orchestrator_stage_updated', (event) => {
+      if (!event?.run_id) {
+        return;
+      }
+
+      setRuns((prevRuns) => prevRuns.map((run) => {
+        if (run.id !== event.run_id) {
+          return run;
+        }
+
+        return {
+          ...run,
+          current_stage: event.stage,
+          stages: {
+            ...(run.stages || {}),
+            [event.stage]: {
+              ...(run.stages?.[event.stage] || {}),
+              status: event.status,
+              details: event.details || {},
+            },
+          },
+        };
+      }));
+
+      setSelectedRun((prev) => {
+        if (!prev || prev.id !== event.run_id) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          current_stage: event.stage,
+          stages: {
+            ...(prev.stages || {}),
+            [event.stage]: {
+              ...(prev.stages?.[event.stage] || {}),
+              status: event.status,
+              details: event.details || {},
+            },
+          },
+        };
+      });
+    });
+
+    return () => {
+      unsubscribeCreated?.();
+      unsubscribeStage?.();
+    };
+  }, [subscribe]);
+
+  const generateStrategyForOrchestrator = async () => {
+    if (isGeneratingStrategy) {
+      return;
+    }
+
+    setIsGeneratingStrategy(true);
+    setError(null);
+    try {
+      const generated = await strategiesAPI.generate({
+        goal: 'Generate a robust baseline strategy for orchestrator first-run pipeline execution',
+        risk_preference: 'moderate',
+        max_strategies: 1,
+      });
+
+      if (!Array.isArray(generated) || generated.length === 0 || !generated[0]?.id) {
+        throw new Error('Strategy generation did not return a usable strategy ID');
+      }
+
+      await loadStrategies();
+      setSelectedStrategyId(generated[0].id);
+    } catch (err) {
+      setError(err?.response?.data?.detail || err.message || 'Failed to generate strategy');
+    } finally {
+      setIsGeneratingStrategy(false);
+    }
+  };
+
+  const startNewRun = async () => {
+    if (startingRun) {
+      return;
+    }
+
+    setStartingRun(true);
+    setError(null);
+    try {
+      const strategyId = selectedStrategyId || availableStrategies[0]?.id || runs[0]?.strategy_id;
+      if (!strategyId) {
+        throw new Error('No strategy available. Generate one strategy before starting an orchestrator run.');
+      }
+
+      const result = await orchestratorAPI.run({
+        strategy_id: strategyId,
+        start_date: '2023-01-01',
+        end_date: '2023-12-31',
+        initial_capital: 100000,
+        instruments: ['SPY'],
+      });
+
+      if (result?.run_id) {
+        const runStatus = await orchestratorAPI.getStatus(result.run_id);
+        setSelectedRun(runStatus);
+      }
+
+      await loadOrchestrationRuns();
+      await loadStrategies();
+    } catch (err) {
+      setError(err?.response?.data?.detail || err.message || 'Failed to start orchestrator run');
+    } finally {
+      setStartingRun(false);
     }
   };
 
@@ -48,12 +191,39 @@ const Orchestrator = () => {
       <div className="p-6">
         <EmptyState
           title="No Orchestrator Runs"
-          description="Start an end-to-end pipeline run to see execution progress"
+          description="Start a first end-to-end pipeline run using an existing or newly generated strategy"
           icon={Activity}
           action={
-            <button className="px-6 py-3 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors">
-              Start New Run
-            </button>
+            <div className="space-y-3 w-full max-w-xl">
+              <div className="flex flex-col sm:flex-row gap-2">
+                <select
+                  value={selectedStrategyId}
+                  onChange={(e) => setSelectedStrategyId(e.target.value)}
+                  className="flex-1 px-3 py-2 bg-gray-900 border border-gray-700 rounded text-white text-sm"
+                >
+                  {availableStrategies.length === 0 && <option value="">No strategy available</option>}
+                  {availableStrategies.map((strategy) => (
+                    <option key={strategy.id} value={strategy.id}>
+                      {strategy.name || strategy.strategy_type || strategy.id}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={startNewRun}
+                  disabled={startingRun || !selectedStrategyId}
+                  className="px-6 py-3 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+                >
+                  {startingRun ? 'Starting...' : 'Start New Run'}
+                </button>
+              </div>
+              <button
+                onClick={generateStrategyForOrchestrator}
+                disabled={isGeneratingStrategy}
+                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 disabled:opacity-50 text-white rounded-lg text-sm transition-colors"
+              >
+                {isGeneratingStrategy ? 'Generating Strategy...' : 'Generate Strategy for First Run'}
+              </button>
+            </div>
           }
         />
       </div>
@@ -67,8 +237,12 @@ const Orchestrator = () => {
           <h1 className="text-3xl font-bold text-white mb-2">Orchestrator</h1>
           <p className="text-gray-400">End-to-end pipeline execution and monitoring</p>
         </div>
-        <button className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg transition-colors">
-          Start New Run
+        <button
+          onClick={startNewRun}
+          disabled={startingRun || (!selectedStrategyId && availableStrategies.length === 0)}
+          className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded-lg transition-colors"
+        >
+          {startingRun ? 'Starting...' : 'Start New Run'}
         </button>
       </div>
 

@@ -6,6 +6,16 @@ pub struct BacktestSpec {
     pub seed: u64,
     pub strategy: StrategySpec,
     pub cost_model: CostModelSpec,
+    #[serde(default)]
+    pub data_pipeline: DataPipelineSpec,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum DataPipelineSpec {
+    #[default]
+    Legacy,
+    CanonicalTier1,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

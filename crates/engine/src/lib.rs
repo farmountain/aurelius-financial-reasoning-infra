@@ -7,6 +7,6 @@ pub mod output;
 pub mod portfolio;
 
 pub use backtest::BacktestEngine;
-pub use data_feed::VecDataFeed;
+pub use data_feed::{VecCanonicalEventFeed, VecDataFeed};
 pub use determinism::{canonical_json_hash, stable_hash_bytes};
 pub use portfolio::PortfolioManager;

@@ -1,4 +1,8 @@
 use crate::types::{Bar, Fill, Order, Portfolio};
+use crate::{
+    AdapterRequest, EventEnvelope, NormalizedEventBatch, ProviderCapabilityDeclaration,
+    ProviderRecord,
+};
 use anyhow::Result;
 
 /// Trait for providing market data
@@ -35,6 +39,58 @@ pub trait CostModel {
 
     /// Calculate slippage (price impact)
     fn calculate_slippage(&self, quantity: f64, price: f64, side: crate::types::Side) -> f64;
+}
+
+/// Trait for canonical event feeds
+pub trait CanonicalEventFeed {
+    /// Get the next market event. Returns None when data is exhausted.
+    fn next_event(&mut self) -> Option<EventEnvelope>;
+
+    /// Reset the event feed to the beginning.
+    fn reset_events(&mut self);
+}
+
+/// Trait for market data provider adapters that normalize provider-native records
+/// into canonical market event envelopes.
+pub trait MarketDataAdapter {
+    /// Unique provider identifier.
+    fn provider_id(&self) -> &str;
+
+    /// Supported capabilities for this provider adapter.
+    fn capabilities(&self) -> ProviderCapabilityDeclaration;
+
+    /// Normalize one provider-native record into a canonical event.
+    fn normalize_record(&self, record: ProviderRecord) -> Result<EventEnvelope>;
+
+    /// Normalize a batch while preserving transformation lineage.
+    fn normalize_batch(
+        &self,
+        records: Vec<ProviderRecord>,
+        lineage_step: Option<&str>,
+    ) -> Result<NormalizedEventBatch> {
+        let mut events = Vec::with_capacity(records.len());
+        for record in records {
+            events.push(self.normalize_record(record)?);
+        }
+
+        Ok(NormalizedEventBatch {
+            source_id: self.provider_id().to_string(),
+            events,
+            lineage: lineage_step
+                .map(|step| {
+                    vec![crate::TransformationStep {
+                        step: "normalize_batch".to_string(),
+                        details: step.to_string(),
+                    }]
+                })
+                .unwrap_or_default(),
+        })
+    }
+
+    /// Validate whether this adapter supports a requested capability.
+    fn supports_request(&self, request: &AdapterRequest) -> Result<()> {
+        self.capabilities().supports(request)
+    }
 }
 
 // Implement CostModel for Box<dyn CostModel> to allow dynamic dispatch

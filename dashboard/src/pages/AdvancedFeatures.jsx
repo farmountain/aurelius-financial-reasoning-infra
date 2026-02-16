@@ -48,9 +48,11 @@ export default function AdvancedFeatures() {
   const [portfolioData, setPortfolioData] = useState(null);
   const [efficientFrontier, setEfficientFrontier] = useState(null);
   const [optimizationMethod, setOptimizationMethod] = useState('max_sharpe');
+  const [portfolioReturnsInput, setPortfolioReturnsInput] = useState('[[0.01,0.005,-0.002,0.007],[0.008,0.004,-0.001,0.006],[0.012,0.002,-0.003,0.005]]');
   
   // Risk analysis state
   const [riskMetrics, setRiskMetrics] = useState(null);
+  const [riskReturnsInput, setRiskReturnsInput] = useState('[0.01,-0.003,0.007,0.002,-0.001,0.004]');
   
   // Position sizing state
   const [positionSize, setPositionSize] = useState(null);
@@ -60,16 +62,24 @@ export default function AdvancedFeatures() {
     setTabValue(newValue);
     setError('');
   };
+
+  const parseJsonInput = (value, label) => {
+    try {
+      return JSON.parse(value);
+    } catch (err) {
+      throw new Error(`${label} must be valid JSON`);
+    }
+  };
   
   const optimizePortfolio = async () => {
     setLoading(true);
     setError('');
     
     try {
-      // Generate sample returns for 3 assets
-      const returns = Array(3).fill(0).map(() => 
-        Array(252).fill(0).map(() => (Math.random() - 0.5) * 0.03)
-      );
+      const returns = parseJsonInput(portfolioReturnsInput, 'Portfolio returns');
+      if (!Array.isArray(returns) || returns.length === 0 || !Array.isArray(returns[0])) {
+        throw new Error('Portfolio returns must be a 2D JSON array');
+      }
       
       const response = await api.post('/api/advanced/portfolio/optimize', {
         returns,
@@ -90,9 +100,10 @@ export default function AdvancedFeatures() {
     setError('');
     
     try {
-      const returns = Array(3).fill(0).map(() => 
-        Array(252).fill(0).map(() => (Math.random() - 0.5) * 0.03)
-      );
+      const returns = parseJsonInput(portfolioReturnsInput, 'Portfolio returns');
+      if (!Array.isArray(returns) || returns.length === 0 || !Array.isArray(returns[0])) {
+        throw new Error('Portfolio returns must be a 2D JSON array');
+      }
       
       const response = await api.post('/api/advanced/portfolio/efficient-frontier?n_points=30', {
         returns,
@@ -112,8 +123,10 @@ export default function AdvancedFeatures() {
     setError('');
     
     try {
-      // Generate sample returns
-      const returns = Array(252).fill(0).map(() => (Math.random() - 0.5) * 0.02);
+      const returns = parseJsonInput(riskReturnsInput, 'Risk returns');
+      if (!Array.isArray(returns) || returns.length === 0) {
+        throw new Error('Risk returns must be a non-empty JSON array');
+      }
       const equityCurve = returns.reduce((acc, r) => {
         const last = acc[acc.length - 1] || 1.0;
         acc.push(last * (1 + r));
@@ -212,6 +225,16 @@ export default function AdvancedFeatures() {
                     <MenuItem value="max_return">Maximum Return</MenuItem>
                   </Select>
                 </FormControl>
+
+                <TextField
+                  label="Portfolio Returns (JSON 2D array)"
+                  value={portfolioReturnsInput}
+                  onChange={(e) => setPortfolioReturnsInput(e.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={4}
+                  sx={{ mb: 2 }}
+                />
                 
                 <Button
                   variant="contained"
@@ -379,6 +402,16 @@ export default function AdvancedFeatures() {
                 <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
                   Calculate comprehensive risk metrics including VaR, CVaR, Sharpe ratio, and drawdown statistics.
                 </Typography>
+
+                <TextField
+                  label="Returns Series (JSON array)"
+                  value={riskReturnsInput}
+                  onChange={(e) => setRiskReturnsInput(e.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={4}
+                  sx={{ mb: 2 }}
+                />
                 
                 <Button
                   variant="contained"

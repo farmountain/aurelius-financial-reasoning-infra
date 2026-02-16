@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     # Feature flags
     enable_background_tasks: bool = True
     enable_mock_data: bool = True
+    enable_truth_backtests: bool = os.getenv("ENABLE_TRUTH_BACKTESTS", "true").lower() == "true"
+    enable_truth_validation: bool = os.getenv("ENABLE_TRUTH_VALIDATION", "true").lower() == "true"
+    enable_truth_gates: bool = os.getenv("ENABLE_TRUTH_GATES", "true").lower() == "true"
 
     class Config:
         env_file = ".env"

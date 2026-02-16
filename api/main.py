@@ -10,9 +10,11 @@ import time
 import psutil
 from pathlib import Path
 from typing import Dict, Any
+from sqlalchemy import text
 
 # Add api directory to path for imports
 sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Configure logging
 logging.basicConfig(
@@ -26,7 +28,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import routers
-from routers import strategies, backtests, validation, gates, auth, advanced
+from routers import strategies, backtests, validation, gates, auth, advanced, reflexion, orchestrator
 from routers import websocket_router
 
 # Create FastAPI app
@@ -55,6 +57,8 @@ app.include_router(backtests.router)
 app.include_router(validation.router)
 app.include_router(gates.router)
 app.include_router(advanced.router)
+app.include_router(reflexion.router)
+app.include_router(orchestrator.router)
 app.include_router(websocket_router.router)
 
 # Initialize database
@@ -64,6 +68,48 @@ from database.session import Base, engine
 app.state.start_time = None
 app.state.request_count = 0
 app.state.request_times = []  # Store last 1000 request times
+app.state.startup_status = {
+    "status": "unknown",
+    "components": {
+        "database": {"status": "unknown", "reason": None},
+        "indexes": {"status": "unknown", "reason": None},
+        "cache": {"status": "unknown", "reason": None},
+    },
+}
+
+
+def _set_component_status(component: str, status: str, reason: str | None = None):
+    app.state.startup_status["components"][component] = {
+        "status": status,
+        "reason": reason,
+    }
+
+
+def _recompute_startup_status() -> str:
+    components = app.state.startup_status.get("components", {})
+    statuses = [value.get("status") for value in components.values()]
+
+    if any(state == "failed" for state in statuses):
+        overall = "degraded"
+    elif any(state in {"degraded", "unknown"} for state in statuses):
+        overall = "degraded"
+    else:
+        overall = "healthy"
+
+    app.state.startup_status["status"] = overall
+    return overall
+
+
+def _check_database_liveness() -> tuple[bool, str | None]:
+    """Check database liveness with SQLAlchemy executable query semantics."""
+    try:
+        from database.session import engine
+
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True, None
+    except Exception as exc:
+        return False, str(exc)
 
 @app.on_event("startup")
 async def startup_event():
@@ -74,31 +120,50 @@ async def startup_event():
     # Create tables on startup (wrapped in try/except for graceful degradation)
     try:
         Base.metadata.create_all(bind=engine)
-        logger.info("✅ Database tables created/verified")
+        db_ok, db_reason = _check_database_liveness()
+        if db_ok:
+            _set_component_status("database", "healthy")
+            logger.info("✅ Database tables created/verified and liveness check passed")
+        else:
+            _set_component_status("database", "failed", db_reason)
+            logger.warning("⚠️  Database schema setup succeeded but liveness check failed: %s", db_reason)
     except Exception as e:
-        logger.warning(f"⚠️  Database connection failed on startup: {e}")
-        logger.warning("⚠️  API will run but database operations may fail")
+        _set_component_status("database", "failed", str(e))
+        logger.warning("⚠️  Database dependency unavailable at startup: %s", e)
     
     # Create performance indexes
     try:
         from database.optimization import create_performance_indexes
-        create_performance_indexes()
-        logger.info("✅ Database indexes created/verified")
+        indexes_created = create_performance_indexes()
+        if indexes_created:
+            _set_component_status("indexes", "healthy")
+            logger.info("✅ Database indexes created/verified")
+        else:
+            _set_component_status("indexes", "degraded", "index creation partially skipped or unavailable")
+            logger.warning("⚠️  Database indexes only partially verified")
     except Exception as e:
-        logger.warning(f"⚠️  Could not create indexes: {e}")
+        _set_component_status("indexes", "degraded", str(e))
+        logger.warning("⚠️  Could not create indexes: %s", e)
     
     # Initialize cache
     try:
         from cache import cache
         stats = cache.get_stats()
         if stats.get("enabled"):
+            _set_component_status("cache", "healthy")
             logger.info(f"✅ Redis cache connected: {stats.get('total_keys', 0)} keys")
         else:
+            _set_component_status("cache", "degraded", "cache disabled")
             logger.info("ℹ️  Redis cache disabled")
     except Exception as e:
-        logger.warning(f"⚠️  Cache initialization warning: {e}")
-    
-    logger.info("✅ AURELIUS API startup complete")
+        _set_component_status("cache", "degraded", str(e))
+        logger.warning("⚠️  Cache initialization warning: %s", e)
+
+    overall = _recompute_startup_status()
+    if overall == "healthy":
+        logger.info("✅ AURELIUS API startup complete (healthy)")
+    else:
+        logger.warning("⚠️  AURELIUS API startup complete in degraded mode")
 
 @app.on_event("shutdown")
 async def shutdown_event():
@@ -154,23 +219,33 @@ async def health():
     Health check endpoint for load balancers and monitoring.
     Returns detailed health status including database connectivity.
     """
+    db_ok, db_reason = _check_database_liveness()
+
+    startup_components = app.state.startup_status.get("components", {})
+    startup_snapshot = {
+        "status": app.state.startup_status.get("status", "unknown"),
+        "components": startup_components,
+    }
+
     health_status = {
-        "status": "healthy",
+        "status": "healthy" if db_ok else "degraded",
         "timestamp": datetime.utcnow().isoformat(),
         "service": "AURELIUS API",
-        "version": "1.0.0"
+        "version": "1.0.0",
+        "dependencies": {
+            "database": {
+                "status": "connected" if db_ok else "disconnected",
+                "reason": db_reason,
+            }
+        },
+        "startup": startup_snapshot,
     }
-    
-    # Check database connection
-    try:
-        from database.session import engine
-        with engine.connect() as conn:
-            conn.execute("SELECT 1")
-        health_status["database"] = "connected"
-    except Exception as e:
-        health_status["database"] = "disconnected"
-        health_status["status"] = "degraded"
-        logger.error(f"Health check - Database error: {e}")
+
+    # Backwards-compatible top-level field
+    health_status["database"] = "connected" if db_ok else "disconnected"
+
+    if not db_ok:
+        logger.error("Health check - Database error: %s", db_reason)
     
     return health_status
 

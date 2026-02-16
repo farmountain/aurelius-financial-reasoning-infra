@@ -1,15 +1,18 @@
 # AURELIUS - Current Status Report
 
+> Release maturity note (2026-02-16): This file is a historical phase snapshot, not the sole source of current release readiness.
+> Trust-critical release claims must align with acceptance evidence in `docs/ACCEPTANCE_EVIDENCE_CLOSE_PRODUCT_EXPERIENCE_GAPS.md`.
+
 **Date**: February 1, 2025  
-**Phase**: 7 Complete  
-**Status**: 🟢 Production Ready  
-**Latest Commit**: f36c1c1 - "feat: Add Alembic migration for users table and Phase 7 documentation"
+**Phase Snapshot**: 7 Complete  
+**Current Release Maturity (Evidence-Gated)**: 🟡 Validated with environment caveats  
+**Latest Commit (for this historical snapshot)**: f36c1c1 - "feat: Add Alembic migration for users table and Phase 7 documentation"
 
 ---
 
 ## Executive Summary
 
-All 7 development phases are **complete**. The AURELIUS platform now features:
+This snapshot recorded that all 7 development phases were complete at that time. Current maturity should be interpreted with release-gate evidence, not snapshot age.
 
 - ✅ Fully functional React web dashboard (8 pages)
 - ✅ Complete REST API with 19 endpoints

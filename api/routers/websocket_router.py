@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from websocket.manager import manager
+from websocket.contract import build_ws_message, SUPPORTED_EVENTS
 from security.auth import verify_token
 
 logger = logging.getLogger(__name__)
@@ -31,19 +32,20 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
     
     Message Format:
         {
-            "type": "event_type",
-            "data": {...}
+            "event": "event_type",
+            "timestamp": "ISO-8601",
+            "version": "1.0",
+            "payload": {...}
         }
     
     Event Types:
         - strategy_created: New strategy generated
-        - strategy_updated: Strategy modified
         - backtest_started: Backtest execution started
-        - backtest_progress: Real-time backtest progress
         - backtest_completed: Backtest finished
-        - validation_completed: Validation analysis done
-        - dashboard_update: Dashboard stats refresh
-        - gate_verified: Gate verification result
+        - backtest_failed: Backtest failed
+        - reflexion_iteration_created: Reflexion iteration persisted
+        - orchestrator_run_created: Orchestrator run created
+        - orchestrator_stage_updated: Orchestrator stage transition
     
     Client Commands:
         - subscribe: Subscribe to event types
@@ -67,13 +69,11 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
         await manager.connect(websocket, user_id)
 
         # Send connection confirmation
-        await websocket.send_json({
-            "type": "connected",
-            "data": {
-                "message": "WebSocket connected successfully",
-                "user_id": user_id
-            }
-        })
+        await websocket.send_json(build_ws_message("connected", {
+            "message": "WebSocket connected successfully",
+            "user_id": user_id,
+            "supported_events": sorted(SUPPORTED_EVENTS),
+        }))
 
         # Listen for client messages
         while True:
@@ -85,24 +85,15 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(None)):
             if action == "subscribe":
                 event_types = data.get("events", [])
                 await manager.subscribe(user_id, event_types)
-                await websocket.send_json({
-                    "type": "subscribed",
-                    "data": {"events": event_types}
-                })
+                await websocket.send_json(build_ws_message("subscribed", {"events": event_types}))
 
             elif action == "unsubscribe":
                 event_types = data.get("events", [])
                 await manager.unsubscribe(user_id, event_types)
-                await websocket.send_json({
-                    "type": "unsubscribed",
-                    "data": {"events": event_types}
-                })
+                await websocket.send_json(build_ws_message("unsubscribed", {"events": event_types}))
 
             elif action == "ping":
-                await websocket.send_json({
-                    "type": "pong",
-                    "data": {"timestamp": data.get("timestamp")}
-                })
+                await websocket.send_json(build_ws_message("pong", {"timestamp": data.get("timestamp")}))
 
             else:
                 logger.warning(f"Unknown action from user {user_id}: {action}")

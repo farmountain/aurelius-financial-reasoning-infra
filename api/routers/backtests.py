@@ -19,10 +19,13 @@ from schemas.backtest import (
     BacktestDetailResponse,
 )
 from database.session import get_db
-from database.crud import BacktestDB
+from database.crud import BacktestDB, StrategyDB
+from database.models import Backtest, Validation, GateResult
 from websocket.manager import manager
 from security.dependencies import get_current_user
 from security.auth import TokenData
+from services.engine_backtest import run_engine_backtest
+from config import settings
 
 router = APIRouter(prefix="/api/v1/backtests", tags=["backtests"])
 
@@ -32,49 +35,63 @@ def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
     start_time = time.time()
 
     try:
+        if not getattr(settings, "enable_truth_backtests", True):
+            raise RuntimeError("Truth backtest execution is disabled by rollout flag")
+
         # Update status to running
         BacktestDB.update_running(db, backtest_id)
 
         # Broadcast start event
         asyncio.create_task(manager.broadcast({
-            "type": "backtest_started",
-            "data": {
+            "event": "backtest_started",
+            "payload": {
                 "backtest_id": backtest_id,
                 "strategy_id": request.strategy_id,
                 "timestamp": datetime.utcnow().isoformat()
             }
         }, event_type="backtest_started"))
 
-        # Simulate backtest computation
-        import random
+        strategy = StrategyDB.get(db, request.strategy_id)
+        if not strategy:
+            raise RuntimeError(f"Strategy not found: {request.strategy_id}")
 
-        # Generate mock metrics
-        base_return = random.uniform(5, 25)
-        sharpe = random.uniform(0.8, 2.5)
-        max_dd = -random.uniform(8, 20)
-        win_rate = random.uniform(45, 65)
-
-        metrics_dict = {
-            "total_return": base_return,
-            "sharpe_ratio": sharpe,
-            "sortino_ratio": sharpe * 1.2,
-            "max_drawdown": max_dd,
-            "win_rate": win_rate,
-            "profit_factor": random.uniform(1.2, 2.5),
-            "total_trades": random.randint(50, 200),
-            "avg_trade": base_return / 100,
-            "calmar_ratio": sharpe / abs(max_dd) if max_dd != 0 else 0,
+        strategy_dict = {
+            "id": strategy.id,
+            "strategy_type": strategy.strategy_type,
+            "parameters": strategy.parameters or {},
         }
+        request_dict = {
+            "initial_capital": request.initial_capital,
+            "instruments": request.instruments,
+            "start_date": request.start_date,
+            "end_date": request.end_date,
+            "seed": request.seed,
+            "data_source": request.data_source,
+        }
+
+        run_result = run_engine_backtest(
+            strategy=strategy_dict,
+            request_data=request_dict,
+            run_replay_check=getattr(settings, "enable_replay_check", True),
+        )
+
+        metrics_dict = run_result.metrics
 
         duration = time.time() - start_time
 
         # Update with results
         BacktestDB.update_completed(db, backtest_id, metrics_dict, duration)
 
+        backtest_row = BacktestDB.get(db, backtest_id)
+        if backtest_row:
+            backtest_row.trades = run_result.trades
+            backtest_row.equity_curve = run_result.equity_curve
+            db.commit()
+
         # Broadcast completion event
         asyncio.create_task(manager.broadcast({
-            "type": "backtest_completed",
-            "data": {
+            "event": "backtest_completed",
+            "payload": {
                 "backtest_id": backtest_id,
                 "strategy_id": request.strategy_id,
                 "metrics": metrics_dict,
@@ -88,13 +105,13 @@ def _run_backtest(backtest_id: str, request: BacktestRequest, db: Session):
 
         # Broadcast error event
         asyncio.create_task(manager.broadcast({
-            "type": "backtest_failed",
-            "data": {
+            "event": "backtest_failed",
+            "payload": {
                 "backtest_id": backtest_id,
                 "error": str(e),
                 "timestamp": datetime.utcnow().isoformat()
             }
-        }, event_type="backtest_completed"))
+        }, event_type="backtest_failed"))
 
 
 @router.post("/run", response_model=dict)
@@ -108,6 +125,8 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
         "end_date": request.end_date,
         "initial_capital": request.initial_capital,
         "instruments": request.instruments,
+        "seed": request.seed,
+        "data_source": request.data_source,
     })
 
     backtest_id = backtest_db.id
@@ -119,6 +138,10 @@ async def run_backtest(request: BacktestRequest, background_tasks: BackgroundTas
         "backtest_id": backtest_id,
         "status": "running",
         "message": "Backtest started",
+        "execution_metadata": {
+            "seed": request.seed,
+            "data_source": request.data_source,
+        },
         "created_at": datetime.utcnow().isoformat(),
     }
 
@@ -137,6 +160,10 @@ async def get_backtest_status(backtest_id: str, current_user: TokenData = Depend
     response = {
         "backtest_id": backtest_id,
         "status": backtest_db.status,
+        "execution_metadata": {
+            "seed": backtest_db.seed,
+            "data_source": backtest_db.data_source,
+        },
     }
 
     if backtest_db.status == "completed" and backtest_db.metrics:
@@ -145,6 +172,7 @@ async def get_backtest_status(backtest_id: str, current_user: TokenData = Depend
             "strategy_id": backtest_db.strategy_id,
             "status": backtest_db.status,
             "metrics": backtest_db.metrics,
+            "execution_mode": backtest_db.metrics.get("execution_mode") if isinstance(backtest_db.metrics, dict) else None,
             "start_date": backtest_db.start_date,
             "end_date": backtest_db.end_date,
             "completed_at": backtest_db.completed_at.isoformat(),
@@ -154,8 +182,70 @@ async def get_backtest_status(backtest_id: str, current_user: TokenData = Depend
     return response
 
 
+@router.get("/audit/replay")
+async def audit_replay(
+    spec_hash: str,
+    data_hash: str,
+    seed: str,
+    engine_version: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Reconstruct run evidence from canonical run identity."""
+    backtests = db.query(Backtest).filter(Backtest.status == "completed").all()
+
+    match = None
+    for bt in backtests:
+        metrics = bt.metrics if isinstance(bt.metrics, dict) else {}
+        run_identity = metrics.get("run_identity") if isinstance(metrics.get("run_identity"), dict) else {}
+        if (
+            run_identity.get("spec_hash") == spec_hash
+            and run_identity.get("data_hash") == data_hash
+            and str(run_identity.get("seed")) == str(seed)
+            and run_identity.get("engine_version") == engine_version
+        ):
+            match = bt
+            break
+
+    if not match:
+        raise HTTPException(status_code=404, detail="No run found for provided canonical run identity")
+
+    latest_validation = db.query(Validation).filter(
+        Validation.strategy_id == match.strategy_id,
+        Validation.status == "completed",
+    ).order_by(Validation.completed_at.desc()).first()
+
+    latest_product_gate = db.query(GateResult).filter(
+        GateResult.strategy_id == match.strategy_id,
+        GateResult.gate_type == "product",
+    ).order_by(GateResult.timestamp.desc()).first()
+
+    return {
+        "backtest_id": match.id,
+        "strategy_id": match.strategy_id,
+        "run_identity": match.metrics.get("run_identity") if isinstance(match.metrics, dict) else None,
+        "metrics": match.metrics,
+        "trades": match.trades,
+        "equity_curve": match.equity_curve,
+        "validation": {
+            "validation_id": latest_validation.id,
+            "passed": latest_validation.passed,
+            "metrics": latest_validation.metrics,
+        } if latest_validation else None,
+        "product_gate": {
+            "gate_result_id": latest_product_gate.id,
+            "passed": latest_product_gate.passed,
+            "results": latest_product_gate.results,
+        } if latest_product_gate else None,
+    }
+
+
 @router.get("/{backtest_id}", response_model=BacktestDetailResponse)
-async def get_backtest(backtest_id: str, db: Session = Depends(get_db)):
+async def get_backtest(
+    backtest_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get details for a completed backtest."""
     backtest_db = BacktestDB.get(db, backtest_id)
 
@@ -194,6 +284,7 @@ async def list_backtests(
     strategy_id: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List backtests, optionally filtered by strategy."""

@@ -6,8 +6,13 @@ Comprehensive REST API for quantitative strategy generation, backtesting, valida
 
 - **Strategy Generation**: Generate trading strategies from natural language goals
 - **Backtesting**: Run backtests with detailed performance metrics
+- **Deterministic Run Controls**: Optional `seed` and `data_source` inputs for reproducible runs
 - **Walk-Forward Validation**: Validate strategy stability across historical periods
 - **Gate Verification**: Run dev gate, CRV gate, and product gate checks
+- **Reflexion**: Persisted strategy improvement iteration history and run execution
+- **Orchestrator**: Persisted end-to-end pipeline runs with stage transitions
+- **PostgreSQL Persistence**: Workflow artifacts are persisted in PostgreSQL-backed models
+- **JWT Auth**: Backtest, validation, gate, reflexion, and orchestrator workflow routes are protected
 - **Async Processing**: Background task execution for long-running operations
 - **OpenAPI Documentation**: Auto-generated interactive API documentation
 
@@ -68,6 +73,7 @@ Generate trading strategies from a natural language goal.
   "request_id": "uuid",
   "strategies": [
     {
+      "id": "uuid",
       "strategy_type": "pairs_trading",
       "name": "Pairs Trading Strategy",
       "description": "...",
@@ -79,6 +85,22 @@ Generate trading strategies from a natural language goal.
         "take_profit": 5.0
       },
       "confidence": 0.9
+
+      Use the returned strategy `id` value as `strategy_id` when invoking backtest, validation, gate, reflexion, and orchestrator routes.
+
+      ---
+
+      ## Authentication and Persistence Policy
+
+      - JWT authentication is required for user-scoped workflow routes.
+      - Core workflow artifacts (strategies, backtests, validations, gate results, reflexion, orchestrator runs) are persisted in PostgreSQL tables.
+      - Include `Authorization: Bearer <token>` for protected endpoints.
+
+      Example:
+
+      ```bash
+      curl -H "Authorization: Bearer <token>" http://localhost:8000/api/v1/backtests/123/status
+      ```
     }
   ],
   "generation_time_ms": 125.5
@@ -124,7 +146,9 @@ Start a backtest in the background.
   "start_date": "2023-01-01",
   "end_date": "2024-01-01",
   "initial_capital": 100000,
-  "instruments": ["SPY", "QQQ"]
+  "instruments": ["SPY", "QQQ"],
+  "seed": 42,
+  "data_source": "default"
 }
 ```
 
@@ -370,6 +394,50 @@ GET /api/v1/gates/{strategy_id}/status
 ```
 
 Get current gate status summary for a strategy.
+
+---
+
+### Reflexion
+
+#### Run Reflexion Iteration
+```
+POST /api/v1/reflexion/{strategy_id}/run
+```
+
+#### Get Reflexion History
+```
+GET /api/v1/reflexion/{strategy_id}/history
+```
+
+---
+
+### Orchestrator
+
+#### Create End-to-End Run
+```
+POST /api/v1/orchestrator/runs
+```
+
+#### List Runs
+```
+GET /api/v1/orchestrator/runs
+```
+
+#### Get Run Status
+```
+GET /api/v1/orchestrator/runs/{run_id}
+```
+
+---
+
+### WebSocket Contract
+
+- Canonical envelope shape:
+  - `event`
+  - `timestamp`
+  - `version`
+  - `payload`
+- Event taxonomy reference: [../docs/WEBSOCKET_CONTRACT.md](../docs/WEBSOCKET_CONTRACT.md)
 
 ---
 

@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 import sys
 import os
+from datetime import timedelta
 
 # Add paths for imports
 sys.path.insert(0, os.path.dirname(__file__))
@@ -18,7 +19,11 @@ from schemas.validation import (
     ValidationListResponse,
 )
 from database.session import get_db
-from database.crud import ValidationDB
+from database.crud import ValidationDB, StrategyDB
+from services.engine_backtest import run_engine_backtest
+from config import settings
+from security.dependencies import get_current_user
+from security.auth import TokenData
 
 router = APIRouter(prefix="/api/v1/validation", tags=["validation"])
 
@@ -28,13 +33,23 @@ def _run_validation(validation_id: str, request: ValidationRequest, db: Session)
     start_time = time.time()
 
     try:
-        import random
-        from datetime import datetime, timedelta
+        if not getattr(settings, "enable_truth_validation", True):
+            raise RuntimeError("Truth validation execution is disabled by rollout flag")
 
         # Mark as running
         validation_db = ValidationDB.get(db, validation_id)
         validation_db.status = "running"
         db.commit()
+
+        strategy = StrategyDB.get(db, request.strategy_id)
+        if not strategy:
+            raise RuntimeError(f"Strategy not found: {request.strategy_id}")
+
+        strategy_dict = {
+            "id": strategy.id,
+            "strategy_type": strategy.strategy_type,
+            "parameters": strategy.parameters or {},
+        }
 
         # Parse dates
         start_date = datetime.strptime(request.start_date, "%Y-%m-%d")
@@ -45,8 +60,8 @@ def _run_validation(validation_id: str, request: ValidationRequest, db: Session)
         window_step = request.window_size_days
         num_windows = max(1, (total_days - request.train_size_days) // window_step)
 
-        windows = []
-        degradations = []
+        windows: list[dict] = []
+        degradations: list[float] = []
 
         for i in range(num_windows):
             offset = i * window_step
@@ -56,10 +71,34 @@ def _run_validation(validation_id: str, request: ValidationRequest, db: Session)
             test_start = train_end
             test_end = test_start + timedelta(days=request.window_size_days)
 
-            # Generate window metrics
-            train_sharpe = random.uniform(1.5, 2.5)
-            test_sharpe = train_sharpe * random.uniform(0.7, 0.95)
-            degradation = ((train_sharpe - test_sharpe) / train_sharpe) * 100
+            if test_end > end_date:
+                break
+
+            train_result = run_engine_backtest(
+                strategy=strategy_dict,
+                request_data={
+                    "start_date": train_start.strftime("%Y-%m-%d"),
+                    "end_date": train_end.strftime("%Y-%m-%d"),
+                    "initial_capital": request.initial_capital,
+                    "instruments": [strategy.parameters.get("symbol", "SPY")],
+                },
+                run_replay_check=False,
+            )
+
+            test_result = run_engine_backtest(
+                strategy=strategy_dict,
+                request_data={
+                    "start_date": test_start.strftime("%Y-%m-%d"),
+                    "end_date": test_end.strftime("%Y-%m-%d"),
+                    "initial_capital": request.initial_capital,
+                    "instruments": [strategy.parameters.get("symbol", "SPY")],
+                },
+                run_replay_check=False,
+            )
+
+            train_sharpe = float(train_result.metrics.get("sharpe_ratio", 0.0))
+            test_sharpe = float(test_result.metrics.get("sharpe_ratio", 0.0))
+            degradation = ((train_sharpe - test_sharpe) / abs(train_sharpe) * 100.0) if train_sharpe != 0 else 0.0
             degradations.append(degradation)
 
             window = {
@@ -70,13 +109,18 @@ def _run_validation(validation_id: str, request: ValidationRequest, db: Session)
                 "test_end": test_end.strftime("%Y-%m-%d"),
                 "train_sharpe": train_sharpe,
                 "test_sharpe": test_sharpe,
-                "train_return": random.uniform(5, 20),
-                "test_return": random.uniform(3, 18),
-                "train_drawdown": -random.uniform(8, 15),
-                "test_drawdown": -random.uniform(8, 20),
+                "train_return": float(train_result.metrics.get("total_return", 0.0)),
+                "test_return": float(test_result.metrics.get("total_return", 0.0)),
+                "train_drawdown": float(train_result.metrics.get("max_drawdown", 0.0)),
+                "test_drawdown": float(test_result.metrics.get("max_drawdown", 0.0)),
                 "degradation": degradation,
+                "train_run_identity": train_result.run_identity,
+                "test_run_identity": test_result.run_identity,
             }
             windows.append(window)
+
+        if not windows:
+            raise RuntimeError("No validation windows were generated for the requested period")
 
         # Calculate summary metrics
         avg_degradation = sum(degradations) / len(degradations) if degradations else 0
@@ -103,6 +147,7 @@ def _run_validation(validation_id: str, request: ValidationRequest, db: Session)
 
 @router.post("/run", response_model=dict)
 async def run_validation(request: ValidationRequest, background_tasks: BackgroundTasks,
+                        current_user: TokenData = Depends(get_current_user),
                         db: Session = Depends(get_db)):
     """Run walk-forward validation for a strategy."""
     # Create validation record in database
@@ -127,7 +172,11 @@ async def run_validation(request: ValidationRequest, background_tasks: Backgroun
 
 
 @router.get("/{validation_id}/status")
-async def get_validation_status(validation_id: str, db: Session = Depends(get_db)):
+async def get_validation_status(
+    validation_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Check status of a validation."""
     validation_db = ValidationDB.get(db, validation_id)
 
@@ -159,7 +208,11 @@ async def get_validation_status(validation_id: str, db: Session = Depends(get_db
 
 
 @router.get("/{validation_id}", response_model=ValidationResult)
-async def get_validation(validation_id: str, db: Session = Depends(get_db)):
+async def get_validation(
+    validation_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     """Get details for a validation."""
     validation_db = ValidationDB.get(db, validation_id)
 
@@ -200,6 +253,7 @@ async def list_validations(
     strategy_id: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
+    current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """List validations, optionally filtered by strategy."""

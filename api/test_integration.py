@@ -274,7 +274,7 @@ class APITester:
                         # Should receive connection confirmation
                         msg = await asyncio.wait_for(websocket.recv(), timeout=2.0)
                         data = json.loads(msg)
-                        return data.get("type") == "connected"
+                        return data.get("event") == "connected"
                 except Exception as e:
                     print(f"  ⚠️  WebSocket error: {e}")
                     return False

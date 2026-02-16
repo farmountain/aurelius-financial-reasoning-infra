@@ -116,6 +116,13 @@ jobs:
         working-directory: ./api
         run: python test_integration.py
 
+      - name: Validate dashboard API contract parity
+        run: python dashboard/scripts/validate_api_contract.py
+
+      - name: Run truth-path end-to-end acceptance
+        working-directory: ./api
+        run: python validate_truth_path_e2e.py
+
   # Security Scan
   security-scan:
     name: Security Scan

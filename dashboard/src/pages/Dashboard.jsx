@@ -3,6 +3,7 @@ import { strategiesAPI, backtestsAPI, gatesAPI } from '../services/api';
 import LoadingSpinner from '../components/LoadingSpinner';
 import ErrorMessage from '../components/ErrorMessage';
 import { TrendingUp, TrendingDown, CheckCircle, XCircle, Layers, Activity } from 'lucide-react';
+import { useRealtimeDashboard } from '../hooks/useRealtime';
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -12,10 +13,22 @@ const Dashboard = () => {
     recentBacktests: [],
     gateStats: { passed: 0, failed: 0, total: 0 },
   });
+  const realtimeStats = useRealtimeDashboard();
 
   useEffect(() => {
     loadDashboardData();
   }, []);
+
+  useEffect(() => {
+    if (
+      (realtimeStats?.recent_backtests || []).length > 0 ||
+      (realtimeStats?.running_backtests || 0) > 0 ||
+      (realtimeStats?.gates_passed || 0) > 0 ||
+      (realtimeStats?.gates_failed || 0) > 0
+    ) {
+      loadDashboardData();
+    }
+  }, [realtimeStats]);
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -26,10 +39,33 @@ const Dashboard = () => {
         backtestsAPI.list(null, 10, 0),
       ]);
 
+      const gateStatuses = await Promise.allSettled(
+        (strategies || []).map((strategy) => gatesAPI.getStatus(strategy.id))
+      );
+
+      let passed = 0;
+      let failed = 0;
+      gateStatuses.forEach((result) => {
+        if (result.status !== 'fulfilled') {
+          return;
+        }
+
+        const payload = result.value || {};
+        if (payload.production_ready === true) {
+          passed += 1;
+        } else {
+          failed += 1;
+        }
+      });
+
       setStats({
         totalStrategies: strategies.length,
         recentBacktests: backtests.slice(0, 5),
-        gateStats: { passed: 0, failed: 0, total: 0 }, // TODO: Calculate from gate results
+        gateStats: {
+          passed,
+          failed,
+          total: gateStatuses.filter((result) => result.status === 'fulfilled').length,
+        },
       });
     } catch (err) {
       setError(err.message || 'Failed to load dashboard data');

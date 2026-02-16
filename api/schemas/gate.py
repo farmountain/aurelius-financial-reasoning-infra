@@ -84,3 +84,5 @@ class GateStatusResponse(BaseModel):
     crv_gate_passed: bool = Field(..., description="CRV gate status")
     validation_passed: bool = Field(..., description="Validation status")
     production_ready: bool = Field(..., description="Overall production readiness")
+    execution_mode: Optional[str] = Field(default=None, description="Execution mode for latest run")
+    promotion_block_reasons: list[str] = Field(default_factory=list, description="Reasons blocking promotion")

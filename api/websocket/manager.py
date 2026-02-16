@@ -5,7 +5,10 @@ import logging
 from typing import Dict, List, Set
 from fastapi import WebSocket
 
+from websocket.contract import SUPPORTED_EVENTS, build_ws_message
+
 logger = logging.getLogger(__name__)
+DEFAULT_EVENT = "connected"
 
 
 class ConnectionManager:
@@ -44,10 +47,15 @@ class ConnectionManager:
 
         # Default subscriptions for all users
         self.subscriptions[user_id].update([
-            "dashboard_update",
             "strategy_created",
             "backtest_started",
-            "backtest_completed"
+            "backtest_completed",
+            "backtest_failed",
+            "validation_completed",
+            "gate_verified",
+            "reflexion_iteration_created",
+            "orchestrator_run_created",
+            "orchestrator_stage_updated",
         ])
 
         logger.info(f"WebSocket connected for user {user_id}. Total connections: {self._get_connection_count()}")
@@ -85,7 +93,15 @@ class ConnectionManager:
         if user_id not in self.active_connections:
             return
 
-        message_text = json.dumps(message)
+        event = message.get("event") or message.get("type") or DEFAULT_EVENT
+        if event not in SUPPORTED_EVENTS:
+            logger.warning("Non-canonical websocket event '%s' mapped to '%s'", event, DEFAULT_EVENT)
+            event = DEFAULT_EVENT
+        payload = message.get("payload")
+        if payload is None:
+            payload = message.get("data", {})
+        envelope = build_ws_message(event, payload)
+        message_text = json.dumps(envelope)
         dead_connections = []
 
         for connection in self.active_connections[user_id]:
@@ -107,7 +123,14 @@ class ConnectionManager:
             message: The message to send (will be JSON-encoded)
             event_type: Optional event type to filter by subscriptions
         """
-        message_text = json.dumps(message)
+        event = event_type or message.get("event") or message.get("type") or DEFAULT_EVENT
+        if event not in SUPPORTED_EVENTS:
+            logger.warning("Non-canonical websocket event '%s' mapped to '%s'", event, DEFAULT_EVENT)
+            event = DEFAULT_EVENT
+        payload = message.get("payload")
+        if payload is None:
+            payload = message.get("data", {})
+        message_text = json.dumps(build_ws_message(event, payload))
         dead_connections = []
 
         for user_id, connections in list(self.active_connections.items()):

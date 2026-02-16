@@ -4,11 +4,14 @@ use cost::{FixedPerShareCost, PercentageCost, ZeroCost};
 use crv_verifier::{CRVVerifier, PolicyConstraints};
 use engine::{BacktestEngine, VecDataFeed};
 use polars::prelude::*;
-use schema::{Bar, CostModel};
+use schema::{
+    sort_events_deterministically, validate_events_for_tier, Bar, CostModel, EventEnvelope,
+    FidelityTier, MarketEventPayload, MarketEventType, QualityFlag,
+};
 use std::fs;
 use std::path::Path;
 
-use crate::spec::{BacktestSpec, CostModelSpec, StrategySpec};
+use crate::spec::{BacktestSpec, CostModelSpec, DataPipelineSpec, StrategySpec};
 use crate::strategies::TsMomentumStrategy;
 
 pub fn run_backtest(spec_path: &Path, data_path: &Path, out_dir: &Path) -> Result<()> {
@@ -20,13 +23,23 @@ pub fn run_backtest(spec_path: &Path, data_path: &Path, out_dir: &Path) -> Resul
     // Create output directory
     fs::create_dir_all(out_dir).context("Failed to create output directory")?;
 
-    // Load data from parquet
-    let bars = load_bars_from_parquet(data_path)?;
+    // Load data from parquet (legacy bar path or canonical Tier 1 bridge path)
+    let bars = match spec.data_pipeline {
+        DataPipelineSpec::Legacy => load_bars_from_parquet_legacy(data_path)?,
+        DataPipelineSpec::CanonicalTier1 => load_bars_from_parquet_canonical_tier1(data_path)?,
+    };
 
     println!("Loaded {} bars", bars.len());
     println!("Running backtest with {} strategy", spec.strategy_name());
     println!("Initial cash: ${:.2}", spec.initial_cash);
     println!("Seed: {}", spec.seed);
+    println!(
+        "Data pipeline: {}",
+        match spec.data_pipeline {
+            DataPipelineSpec::Legacy => "legacy",
+            DataPipelineSpec::CanonicalTier1 => "canonical_tier1",
+        }
+    );
 
     // Create data feed
     let data_feed = VecDataFeed::new(bars);
@@ -142,7 +155,7 @@ fn run_backtest_with_strategy<S: schema::Strategy>(
     Ok(())
 }
 
-fn load_bars_from_parquet(path: &Path) -> Result<Vec<Bar>> {
+fn load_bars_from_parquet_legacy(path: &Path) -> Result<Vec<Bar>> {
     let df = LazyFrame::scan_parquet(path, Default::default())?.collect()?;
 
     let timestamps = df
@@ -199,10 +212,121 @@ fn load_bars_from_parquet(path: &Path) -> Result<Vec<Bar>> {
     Ok(bars)
 }
 
+fn load_bars_from_parquet_canonical_tier1(path: &Path) -> Result<Vec<Bar>> {
+    let legacy_bars = load_bars_from_parquet_legacy(path)?;
+    let mut events = bars_to_canonical_tier1_events(&legacy_bars, "legacy-parquet");
+
+    sort_events_deterministically(&mut events);
+    validate_events_for_tier(&events, FidelityTier::Tier1Bar)
+        .context("Canonical Tier 1 validation failed")?;
+
+    canonical_tier1_events_to_bars(&events)
+}
+
+fn bars_to_canonical_tier1_events(bars: &[Bar], source_id: &str) -> Vec<EventEnvelope> {
+    bars.iter()
+        .map(|bar| EventEnvelope {
+            event_type: MarketEventType::Bar,
+            symbol: bar.symbol.clone(),
+            event_time: bar.timestamp,
+            ingest_time: bar.timestamp,
+            source_id: source_id.to_string(),
+            quality_flags: vec![QualityFlag::DerivedValue],
+            payload: MarketEventPayload::Bar(bar.clone()),
+        })
+        .collect()
+}
+
+fn canonical_tier1_events_to_bars(events: &[EventEnvelope]) -> Result<Vec<Bar>> {
+    let mut bars = Vec::new();
+
+    for event in events {
+        event
+            .validate_required_fields()
+            .context("Invalid canonical event encountered")?;
+
+        if let MarketEventPayload::Bar(bar) = &event.payload {
+            bars.push(bar.clone());
+        }
+    }
+
+    Ok(bars)
+}
+
 impl BacktestSpec {
     fn strategy_name(&self) -> &str {
         match &self.strategy {
             StrategySpec::TsMomentum { .. } => "TsMomentum",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn canonical_tier1_bridge_preserves_legacy_bars() {
+        let legacy = vec![
+            Bar {
+                timestamp: 1000,
+                symbol: "AAPL".to_string(),
+                open: 100.0,
+                high: 102.0,
+                low: 99.0,
+                close: 101.0,
+                volume: 10000.0,
+            },
+            Bar {
+                timestamp: 2000,
+                symbol: "AAPL".to_string(),
+                open: 101.0,
+                high: 103.0,
+                low: 100.0,
+                close: 102.0,
+                volume: 11000.0,
+            },
+        ];
+
+        let events = bars_to_canonical_tier1_events(&legacy, "legacy-parquet");
+        let recovered = canonical_tier1_events_to_bars(&events).unwrap();
+
+        assert_eq!(legacy, recovered);
+    }
+
+    #[test]
+    fn tier_readiness_requires_trade_or_quote_for_tier2() {
+        let events = bars_to_canonical_tier1_events(
+            &[Bar {
+                timestamp: 1000,
+                symbol: "AAPL".to_string(),
+                open: 100.0,
+                high: 102.0,
+                low: 99.0,
+                close: 101.0,
+                volume: 10000.0,
+            }],
+            "legacy-parquet",
+        );
+
+        assert!(validate_events_for_tier(&events, FidelityTier::Tier2TickQuote).is_err());
+    }
+
+    #[test]
+    fn tier_readiness_requires_book_for_tier3() {
+        let events = bars_to_canonical_tier1_events(
+            &[Bar {
+                timestamp: 1000,
+                symbol: "AAPL".to_string(),
+                open: 100.0,
+                high: 102.0,
+                low: 99.0,
+                close: 101.0,
+                volume: 10000.0,
+            }],
+            "legacy-parquet",
+        );
+
+        assert!(validate_events_for_tier(&events, FidelityTier::Tier3OrderBook).is_err());
     }
 }

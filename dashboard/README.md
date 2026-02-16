@@ -9,8 +9,8 @@ Web dashboard for the AURELIUS Quant Reasoning Model.
 - **Backtest Analysis**: Visualize backtest results with interactive charts
 - **Validation Results**: View walk-forward validation analysis
 - **Gate Status**: Monitor dev, CRV, and product gate checks
-- **Reflexion Loop**: Track strategy improvement iterations
-- **Orchestrator**: Monitor end-to-end pipeline execution
+- **Reflexion Loop**: Track strategy improvement iterations and run new iterations
+- **Orchestrator**: Start and monitor persisted end-to-end pipeline runs
 
 ## Tech Stack
 
@@ -119,14 +119,25 @@ The dashboard communicates with the REST API through the `api.js` service module
 - [x] Responsive design
 - [x] Loading states and error handling
 - [x] Empty states
-- [ ] Validation results page
-- [ ] Gates status page
-- [ ] Reflexion history page
-- [ ] Orchestrator runs page
-- [ ] Strategy generation form
-- [ ] Backtest execution form
-- [ ] Real-time updates (WebSocket)
-- [ ] Authentication
+- [x] Validation results page
+- [x] Gates status page
+- [x] Reflexion history page
+- [x] Orchestrator runs page
+- [x] Strategy generation form
+- [x] Backtest execution form
+- [x] Real-time updates (WebSocket contract aligned)
+- [x] Authentication
+
+## WebSocket Contract
+
+Dashboard listeners consume the canonical websocket envelope:
+
+- `event`
+- `timestamp`
+- `version`
+- `payload`
+
+Contract source is shared with backend and validated by tests.
 
 ## Development Notes
 

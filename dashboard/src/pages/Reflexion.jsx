@@ -5,13 +5,17 @@ import ErrorMessage from '../components/ErrorMessage';
 import EmptyState from '../components/EmptyState';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line } from 'recharts';
 import { RefreshCw } from 'lucide-react';
+import { useRealtimeReflexionEvents } from '../hooks/useRealtime';
 
 const Reflexion = () => {
   const [strategies, setStrategies] = useState([]);
   const [selectedStrategy, setSelectedStrategy] = useState(null);
   const [reflexionHistory, setReflexionHistory] = useState([]);
+  const [feedback, setFeedback] = useState('');
+  const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [strategyIterationCounts, setStrategyIterationCounts] = useState({});
 
   useEffect(() => {
     loadStrategies();
@@ -23,12 +27,28 @@ const Reflexion = () => {
     }
   }, [selectedStrategy]);
 
+  useRealtimeReflexionEvents((event) => {
+    if (!event?.strategy_id) {
+      return;
+    }
+
+    setStrategyIterationCounts((prev) => ({
+      ...prev,
+      [event.strategy_id]: (prev[event.strategy_id] ?? 0) + 1,
+    }));
+
+    if (selectedStrategy?.id === event.strategy_id) {
+      loadReflexionHistory(event.strategy_id);
+    }
+  });
+
   const loadStrategies = async () => {
     setLoading(true);
     setError(null);
     try {
       const data = await strategiesAPI.list(100, 0);
       setStrategies(data);
+      await loadIterationCounts(Array.isArray(data) ? data : []);
       if (data.length > 0) {
         setSelectedStrategy(data[0]);
       }
@@ -45,6 +65,41 @@ const Reflexion = () => {
       setReflexionHistory(Array.isArray(data) ? data : []);
     } catch (err) {
       setReflexionHistory([]);
+    }
+  };
+
+  const loadIterationCounts = async (strategyList) => {
+    const counts = {};
+    await Promise.all(
+      (strategyList || []).map(async (strategy) => {
+        try {
+          const history = await reflexionAPI.getHistory(strategy.id);
+          counts[strategy.id] = Array.isArray(history) ? history.length : 0;
+        } catch (err) {
+          counts[strategy.id] = 0;
+        }
+      })
+    );
+    setStrategyIterationCounts(counts);
+  };
+
+  const runIteration = async () => {
+    if (!selectedStrategy || running) {
+      return;
+    }
+
+    setRunning(true);
+    try {
+      await reflexionAPI.run(selectedStrategy.id, {
+        feedback: feedback || undefined,
+      });
+      setFeedback('');
+      await loadReflexionHistory(selectedStrategy.id);
+      await loadIterationCounts(strategies);
+    } catch (err) {
+      setError(err.message || 'Failed to run reflexion iteration');
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -77,6 +132,23 @@ const Reflexion = () => {
       <div>
         <h1 className="text-3xl font-bold text-white mb-2">Reflexion</h1>
         <p className="text-gray-400">Strategy improvement iterations and feedback loops</p>
+        {selectedStrategy && (
+          <div className="mt-3 flex flex-col sm:flex-row gap-2">
+            <input
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              className="px-3 py-2 bg-gray-900 border border-gray-700 rounded text-sm text-white flex-1"
+              placeholder="Optional feedback for next reflexion iteration"
+            />
+            <button
+              onClick={runIteration}
+              disabled={running}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-700 disabled:opacity-50 text-white rounded"
+            >
+              {running ? 'Running...' : 'Run Iteration'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -96,7 +168,7 @@ const Reflexion = () => {
               >
                 <p className="font-medium text-sm">{strategy.name}</p>
                 <p className="text-xs opacity-75 mt-1">
-                  Iterations: {reflexionHistory.length}
+                  Iterations: {strategyIterationCounts[strategy.id] ?? 0}
                 </p>
               </button>
             ))}

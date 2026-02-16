@@ -17,6 +17,22 @@ class BacktestRequest(BaseModel):
         default=["SPY"],
         description="List of instruments/symbols to trade"
     )
+    seed: int = Field(
+        default=42,
+        description="Optional deterministic seed for execution"
+    )
+    data_source: str = Field(
+        default="default",
+        description="Optional data source identifier or path"
+    )
+    seed: int = Field(
+        default=42,
+        description="Deterministic random seed used for run identity and replay"
+    )
+    data_source: str = Field(
+        default="default",
+        description="Dataset selection key or absolute parquet path"
+    )
 
 
 class BacktestMetrics(BaseModel):

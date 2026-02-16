@@ -6,13 +6,19 @@ export const useRealtimeStrategies = () => {
   const { subscribe } = useWebSocket();
 
   useEffect(() => {
-    const unsubscribe = subscribe('strategy_update', (data) => {
+    const unsubscribe = subscribe('strategy_created', (data) => {
+      const incoming = Array.isArray(data?.strategies) ? data.strategies : (data ? [data] : []);
       setStrategies(prev => {
-        const index = prev.findIndex(s => s.id === data.id);
-        if (index >= 0) {
-          return [...prev.slice(0, index), data, ...prev.slice(index + 1)];
-        }
-        return [...prev, data];
+        const merged = [...prev];
+        incoming.forEach((item) => {
+          const index = merged.findIndex(s => s.id === item.id);
+          if (index >= 0) {
+            merged[index] = item;
+          } else {
+            merged.push(item);
+          }
+        });
+        return merged;
       });
     });
 
@@ -27,9 +33,9 @@ export const useRealtimeBacktests = () => {
   const { subscribe } = useWebSocket();
 
   useEffect(() => {
-    const unsubscribe = subscribe('backtest_update', (data) => {
+    const unsubscribe = subscribe('backtest_completed', (data) => {
       setBacktests(prev => {
-        const index = prev.findIndex(b => b.id === data.id);
+        const index = prev.findIndex(b => b.id === data.backtest_id || b.backtest_id === data.backtest_id);
         if (index >= 0) {
           return [...prev.slice(0, index), data, ...prev.slice(index + 1)];
         }
@@ -54,14 +60,46 @@ export const useRealtimeDashboard = () => {
   const { subscribe } = useWebSocket();
 
   useEffect(() => {
-    const unsubscribe = subscribe('dashboard_update', (data) => {
-      setStats(prev => ({ ...prev, ...data }));
-    });
+    const unsubscribers = [
+      subscribe('backtest_started', () => {
+        setStats(prev => ({ ...prev, running_backtests: (prev.running_backtests || 0) + 1 }));
+      }),
+      subscribe('backtest_completed', (data) => {
+        setStats(prev => ({
+          ...prev,
+          running_backtests: Math.max((prev.running_backtests || 1) - 1, 0),
+          recent_backtests: [data, ...(prev.recent_backtests || [])].slice(0, 5),
+        }));
+      }),
+      subscribe('gate_verified', (data) => {
+        setStats(prev => ({
+          ...prev,
+          gates_passed: (prev.gates_passed || 0) + (data?.passed ? 1 : 0),
+          gates_failed: (prev.gates_failed || 0) + (data?.passed ? 0 : 1),
+        }));
+      }),
+    ];
 
-    return unsubscribe;
+    return () => {
+      unsubscribers.forEach((unsubscribe) => unsubscribe?.());
+    };
   }, [subscribe]);
 
   return stats;
+};
+
+export const useRealtimeReflexionEvents = (onIterationCreated) => {
+  const { subscribe } = useWebSocket();
+
+  useEffect(() => {
+    const unsubscribe = subscribe('reflexion_iteration_created', (data) => {
+      if (typeof onIterationCreated === 'function') {
+        onIterationCreated(data);
+      }
+    });
+
+    return unsubscribe;
+  }, [onIterationCreated, subscribe]);
 };
 
 export const useRealtimeBacktestProgress = (backtestId) => {
@@ -69,7 +107,7 @@ export const useRealtimeBacktestProgress = (backtestId) => {
   const { subscribe } = useWebSocket();
 
   useEffect(() => {
-    const unsubscribe = subscribe(`backtest_progress_${backtestId}`, (data) => {
+    const unsubscribe = subscribe('backtest_started', (data) => {
       setProgress(data);
     });
 

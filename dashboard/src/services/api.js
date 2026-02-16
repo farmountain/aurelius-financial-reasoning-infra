@@ -1,6 +1,7 @@
 import axios from 'axios';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_V1_PREFIX = '/v1';
 
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
@@ -39,32 +40,51 @@ apiClient.interceptors.response.use(
 // Strategies API
 export const strategiesAPI = {
   generate: async (data) => {
-    const response = await apiClient.post('/strategies/generate', data);
-    return response.data;
+    const response = await apiClient.post(`${API_V1_PREFIX}/strategies/generate`, data);
+    return response.data?.strategies || [];
   },
-  list: async (limit = 100, offset = 0) => {
-    const response = await apiClient.get('/strategies/', { params: { limit, offset } });
-    return response.data;
+  list: async (limit = 100, skip = 0) => {
+    const response = await apiClient.get(`${API_V1_PREFIX}/strategies/`, { params: { limit, skip } });
+    return response.data?.strategies || [];
   },
   get: async (strategyId) => {
-    const response = await apiClient.get(`/strategies/${strategyId}`);
-    return response.data;
+    const response = await apiClient.get(`${API_V1_PREFIX}/strategies/${strategyId}`);
+    const payload = response.data || {};
+    return {
+      id: payload.strategy_id,
+      created_at: payload.created_at,
+      status: payload.status,
+      ...(payload.strategy || {}),
+    };
   },
 };
 
 // Backtests API
 export const backtestsAPI = {
   run: async (strategyId, data) => {
-    const response = await apiClient.post(`/backtests/run/${strategyId}`, data);
+    const response = await apiClient.post(`${API_V1_PREFIX}/backtests/run`, {
+      strategy_id: strategyId,
+      ...data,
+    });
     return response.data;
   },
-  list: async (strategyId = null, limit = 100, offset = 0) => {
-    const url = strategyId ? `/backtests/strategy/${strategyId}` : '/backtests/';
-    const response = await apiClient.get(url, { params: { limit, offset } });
-    return response.data;
+  list: async (strategyId = null, limit = 100, skip = 0) => {
+    const response = await apiClient.get(`${API_V1_PREFIX}/backtests/`, {
+      params: { strategy_id: strategyId, limit, skip },
+    });
+    return (response.data?.backtests || []).map((item) => ({
+      id: item.backtest_id,
+      strategy_id: item.strategy_id,
+      status: item.status,
+      start_date: item.start_date,
+      end_date: item.end_date,
+      created_at: item.completed_at,
+      results: item.metrics,
+      duration_seconds: item.duration_seconds,
+    }));
   },
   get: async (backtestId) => {
-    const response = await apiClient.get(`/backtests/${backtestId}`);
+    const response = await apiClient.get(`${API_V1_PREFIX}/backtests/${backtestId}`);
     return response.data;
   },
 };
@@ -72,41 +92,49 @@ export const backtestsAPI = {
 // Validations API
 export const validationsAPI = {
   run: async (strategyId, data) => {
-    const response = await apiClient.post(`/validation/run/${strategyId}`, data);
+    const response = await apiClient.post(`${API_V1_PREFIX}/validation/run`, {
+      strategy_id: strategyId,
+      ...data,
+    });
     return response.data;
   },
-  list: async (strategyId = null, limit = 100, offset = 0) => {
-    const url = strategyId ? `/validation/strategy/${strategyId}` : '/validation/';
-    const response = await apiClient.get(url, { params: { limit, offset } });
-    return response.data;
+  list: async (strategyId = null, limit = 100, skip = 0) => {
+    const response = await apiClient.get(`${API_V1_PREFIX}/validation/`, {
+      params: { strategy_id: strategyId, limit, skip },
+    });
+    return response.data?.validations || [];
   },
   get: async (validationId) => {
-    const response = await apiClient.get(`/validation/${validationId}`);
+    const response = await apiClient.get(`${API_V1_PREFIX}/validation/${validationId}`);
     return response.data;
   },
 };
 
 // Gates API
 export const gatesAPI = {
-  runDev: async (strategyId, data) => {
-    const response = await apiClient.post(`/gates/dev/${strategyId}`, data);
+  runDev: async (strategyId, data = {}) => {
+    const response = await apiClient.post(`${API_V1_PREFIX}/gates/dev-gate`, {
+      strategy_id: strategyId,
+      ...data,
+    });
     return response.data;
   },
-  runCRV: async (strategyId, data) => {
-    const response = await apiClient.post(`/gates/crv/${strategyId}`, data);
+  runCRV: async (strategyId, data = {}) => {
+    const response = await apiClient.post(`${API_V1_PREFIX}/gates/crv-gate`, {
+      strategy_id: strategyId,
+      ...data,
+    });
     return response.data;
   },
-  runProduct: async (strategyId) => {
-    const response = await apiClient.post(`/gates/product/${strategyId}`);
+  runProduct: async (strategyId, data = {}) => {
+    const response = await apiClient.post(`${API_V1_PREFIX}/gates/product-gate`, {
+      strategy_id: strategyId,
+      ...data,
+    });
     return response.data;
   },
   getStatus: async (strategyId) => {
-    const response = await apiClient.get(`/gates/status/${strategyId}`);
-    return response.data;
-  },
-  listByStrategy: async (strategyId, gateType = null) => {
-    const params = gateType ? { gate_type: gateType } : {};
-    const response = await apiClient.get(`/gates/strategy/${strategyId}`, { params });
+    const response = await apiClient.get(`${API_V1_PREFIX}/gates/${strategyId}/status`);
     return response.data;
   },
 };
@@ -114,24 +142,28 @@ export const gatesAPI = {
 // Reflexion API
 export const reflexionAPI = {
   run: async (strategyId, data) => {
-    const response = await apiClient.post(`/reflexion/run/${strategyId}`, data);
+    const response = await apiClient.post(`${API_V1_PREFIX}/reflexion/${strategyId}/run`, data || {});
     return response.data;
   },
   getHistory: async (strategyId) => {
-    const response = await apiClient.get(`/reflexion/history/${strategyId}`);
-    return response.data;
+    const response = await apiClient.get(`${API_V1_PREFIX}/reflexion/${strategyId}/history`);
+    return response.data || [];
   },
 };
 
 // Orchestrator API
 export const orchestratorAPI = {
   run: async (data) => {
-    const response = await apiClient.post('/orchestrator/run', data);
+    const response = await apiClient.post(`${API_V1_PREFIX}/orchestrator/runs`, data);
     return response.data;
   },
   getStatus: async (runId) => {
-    const response = await apiClient.get(`/orchestrator/status/${runId}`);
+    const response = await apiClient.get(`${API_V1_PREFIX}/orchestrator/runs/${runId}`);
     return response.data;
+  },
+  list: async (limit = 50, skip = 0) => {
+    const response = await apiClient.get(`${API_V1_PREFIX}/orchestrator/runs`, { params: { limit, skip } });
+    return response.data?.runs || [];
   },
 };
 

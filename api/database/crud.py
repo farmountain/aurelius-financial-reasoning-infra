@@ -1,6 +1,6 @@
 """Database helper functions and CRUD operations."""
 from sqlalchemy.orm import Session
-from database.models import Strategy, Backtest, Validation, GateResult
+from database.models import Strategy, Backtest, Validation, GateResult, ReflexionIteration, OrchestratorRun
 from datetime import datetime
 
 
@@ -53,6 +53,8 @@ class BacktestDB:
             end_date=request_data.get("end_date"),
             initial_capital=request_data.get("initial_capital"),
             instruments=request_data.get("instruments", []),
+            seed=request_data.get("seed", 42),
+            data_source=request_data.get("data_source", "default"),
             status="pending"
         )
         db.add(backtest)
@@ -237,3 +239,117 @@ class GateResultDB:
             GateResult.strategy_id == strategy_id,
             GateResult.gate_type == "product"
         ).order_by(GateResult.timestamp.desc()).first()
+
+
+class ReflexionDB:
+    """Reflexion iteration database operations."""
+
+    @staticmethod
+    def create_iteration(
+        db: Session,
+        strategy_id: str,
+        improvement_score: float,
+        feedback: str | None,
+        improvements: list[str],
+        context_data: dict,
+    ) -> ReflexionIteration:
+        latest = db.query(ReflexionIteration).filter(
+            ReflexionIteration.strategy_id == strategy_id
+        ).order_by(ReflexionIteration.iteration_num.desc()).first()
+
+        iteration_num = 1 if latest is None else latest.iteration_num + 1
+
+        row = ReflexionIteration(
+            strategy_id=strategy_id,
+            iteration_num=iteration_num,
+            improvement_score=improvement_score,
+            feedback=feedback,
+            improvements=improvements,
+            context_data=context_data,
+        )
+        db.add(row)
+        db.commit()
+        db.refresh(row)
+        return row
+
+    @staticmethod
+    def list_by_strategy(db: Session, strategy_id: str, limit: int = 100) -> list[ReflexionIteration]:
+        return db.query(ReflexionIteration).filter(
+            ReflexionIteration.strategy_id == strategy_id
+        ).order_by(ReflexionIteration.iteration_num.desc()).limit(limit).all()
+
+
+class OrchestratorDB:
+    """Orchestrator run database operations."""
+
+    @staticmethod
+    def create(db: Session, strategy_id: str | None, inputs: dict, stages: dict) -> OrchestratorRun:
+        run = OrchestratorRun(
+            strategy_id=strategy_id,
+            status="running",
+            current_stage="generate_strategy",
+            stages=stages,
+            inputs=inputs,
+            outputs={},
+        )
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+        return run
+
+    @staticmethod
+    def get(db: Session, run_id: str) -> OrchestratorRun | None:
+        return db.query(OrchestratorRun).filter(OrchestratorRun.id == run_id).first()
+
+    @staticmethod
+    def list(db: Session, skip: int = 0, limit: int = 20) -> tuple[list[OrchestratorRun], int]:
+        query = db.query(OrchestratorRun).order_by(OrchestratorRun.created_at.desc())
+        total = query.count()
+        return query.offset(skip).limit(limit).all(), total
+
+    @staticmethod
+    def update_stage(
+        db: Session,
+        run_id: str,
+        stage_name: str,
+        status: str,
+        details: dict | None = None,
+        error_message: str | None = None,
+    ) -> OrchestratorRun | None:
+        run = OrchestratorDB.get(db, run_id)
+        if not run:
+            return None
+
+        stages = dict(run.stages or {})
+        stage = dict(stages.get(stage_name, {}))
+        stage["status"] = status
+        stage["updated_at"] = datetime.utcnow().isoformat()
+        if details is not None:
+            stage["details"] = details
+        if error_message:
+            stage["error"] = error_message
+        stages[stage_name] = stage
+
+        run.current_stage = stage_name
+        run.stages = stages
+        if status == "failed":
+            run.status = "failed"
+            run.error_message = error_message
+            run.completed_at = datetime.utcnow()
+        db.commit()
+        db.refresh(run)
+        return run
+
+    @staticmethod
+    def complete(db: Session, run_id: str, outputs: dict) -> OrchestratorRun | None:
+        run = OrchestratorDB.get(db, run_id)
+        if not run:
+            return None
+
+        run.status = "completed"
+        run.current_stage = "completed"
+        run.outputs = outputs
+        run.completed_at = datetime.utcnow()
+        db.commit()
+        db.refresh(run)
+        return run

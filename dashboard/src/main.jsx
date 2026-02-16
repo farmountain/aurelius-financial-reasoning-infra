@@ -1,22 +1,23 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App.jsx'
-import { AuthProvider } from './context/AuthContext.jsx'
+import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { WebSocketProvider } from './context/WebSocketContext.jsx'
 import './index.css'
 
-// Get token from localStorage for WebSocket connection
-const token = localStorage.getItem('auth_token');
+const AppProviders = () => {
+  const { token } = useAuth();
+
+  return (
+    <WebSocketProvider token={token}>
+      <App />
+    </WebSocketProvider>
+  );
+};
 
 const AppWithProviders = () => (
   <AuthProvider>
-    {token ? (
-      <WebSocketProvider token={token}>
-        <App />
-      </WebSocketProvider>
-    ) : (
-      <App />
-    )}
+    <AppProviders />
   </AuthProvider>
 );
 

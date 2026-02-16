@@ -9,30 +9,32 @@ import numpy as np
 from datetime import datetime
 import logging
 
-from ..database.session import get_db
-from ..auth.jwt import get_current_user
-from ..advanced.portfolio_optimizer import (
+from api.database.session import get_db
+from api.security.dependencies import get_current_user
+from api.advanced.portfolio_optimizer import (
     PortfolioOptimizer,
     OptimizationMethod,
     PortfolioMetrics
 )
-from ..advanced.risk_metrics import RiskAnalyzer, RiskMetrics, format_risk_metrics
-from ..advanced.ml_optimizer import (
+from api.advanced.risk_metrics import RiskAnalyzer, RiskMetrics, format_risk_metrics
+from api.advanced.ml_optimizer import (
     StrategyOptimizer,
     OptimizationResult,
     EXAMPLE_PARAM_SPACES
 )
-from ..advanced.risk_management import (
+from api.database.crud import StrategyDB
+from api.services.engine_backtest import run_engine_backtest
+from api.advanced.risk_management import (
     RiskManager,
     RiskLimits,
     PositionSizeMethod
 )
-from ..advanced.indicators import (
+from api.advanced.indicators import (
     indicator_registry,
     calculate_indicator,
     calculate_multiple_indicators
 )
-from ..advanced.multi_asset import (
+from api.advanced.multi_asset import (
     AssetClass,
     AssetMetadata,
     MultiAssetPortfolio,
@@ -215,6 +217,7 @@ async def analyze_risk(
 @router.post("/strategy/optimize")
 async def optimize_strategy(
     request: OptimizeStrategyRequest,
+    db = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """
@@ -235,26 +238,53 @@ async def optimize_strategy(
             n_trials=request.n_trials
         )
         
-        # Mock backtest function (in production, this would call actual backtesting)
+        strategy = StrategyDB.get(db, request.strategy_id)
+        if not strategy:
+            raise HTTPException(404, f"Strategy not found: {request.strategy_id}")
+
+        base_strategy = {
+            "id": strategy.id,
+            "strategy_type": strategy.strategy_type,
+            "parameters": strategy.parameters or {},
+        }
+
+        instruments = [base_strategy["parameters"].get("symbol", "SPY")]
+
+        # Real backtest adapter
         def backtest_function(params, data):
-            # This is a placeholder - real implementation would:
-            # 1. Load historical data
-            # 2. Run backtest with parameters
-            # 3. Return performance metrics
+            strategy_for_trial = {
+                **base_strategy,
+                "parameters": {
+                    **base_strategy["parameters"],
+                    **params,
+                },
+            }
+
+            result = run_engine_backtest(
+                strategy=strategy_for_trial,
+                request_data={
+                    "start_date": request.data_start,
+                    "end_date": request.data_end,
+                    "initial_capital": 100000.0,
+                    "instruments": instruments,
+                },
+                run_replay_check=False,
+            )
+
             return {
-                "sharpe_ratio": np.random.uniform(0.5, 2.0),
-                "total_return": np.random.uniform(0.1, 0.5),
-                "max_drawdown": np.random.uniform(-0.3, -0.1)
+                "sharpe_ratio": float(result.metrics.get("sharpe_ratio", 0.0)),
+                "total_return": float(result.metrics.get("total_return", 0.0)),
+                "max_drawdown": float(result.metrics.get("max_drawdown", 0.0)),
             }
         
-        # Mock data
-        mock_data = np.random.randn(252)
+        # Placeholder data container used by optimizer callback signature.
+        trial_data = np.array([])
         
         # Optimize
         result = optimizer.optimize(
             backtest_function,
             param_space,
-            mock_data,
+            trial_data,
             study_name=f"{request.strategy_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         )
         
