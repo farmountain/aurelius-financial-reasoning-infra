@@ -28,6 +28,9 @@ router.include_router(determinism_router)
 from .gates import router as gates_router
 router.include_router(gates_router)
 
+from .readiness import router as readiness_router
+router.include_router(readiness_router)
+
 # from .risk import router as risk_router
 # from .policy import router as policy_router
 # from .strategy import router as strategy_router

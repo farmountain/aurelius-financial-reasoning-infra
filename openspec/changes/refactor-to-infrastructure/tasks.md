@@ -60,8 +60,8 @@
 
 ## 7. Promotion Readiness Primitive Refactor
 
-- [ ] 7.1 Refactor `api/services/promotion_readiness.py` to conform to primitive API standards
-- [ ] 7.2 Create `/api/primitives/v1/readiness/score` endpoint exposing scorecard externally
+- [x] 7.1 Refactor `api/services/promotion_readiness.py` to conform to primitive API standards
+- [x] 7.2 Create `/api/primitives/v1/readiness/score` endpoint exposing scorecard externally
 - [ ] 7.3 Ensure hard blocker logic consistency between legacy and primitive endpoints
 - [ ] 7.4 Add readiness primitive tests validating API key auth, rate limits, response envelope
 - [ ] 7.5 Update dashboard to call new readiness primitive (feature-flagged rollout)
