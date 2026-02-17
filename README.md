@@ -104,14 +104,22 @@ SignPrimitive API Layer (Infrastructure)
 - Walk-forward validation tooling
 - Strategy generation helpers
 - Task/gate automation
-
-### Service Layer
-- FastAPI-based backend in [api/README.md](api/README.md)
-- React/Vite dashboard in [dashboard/README.md](dashboard/README.md)
-- Developer portal (planned): developers.aurelius.ai
-**OpenAPI Specification:**
-`GET /api/primitives/v1/openapi/primitives/v1.json`
-
+api/primitives](api/primitives) — API primitive infrastructure (NEW)
+  - `v1/` — Primitive endpoints (determinism, risk, policy, gates, etc.)
+  - `feature_flags.py` — Per-primitive rollout control
+  - `monitoring.py` — Performance tracking middleware
+- [api/schemas/primitives.py](api/schemas/primitives.py) — Canonical envelope schemas
+- [api/security](api/security) — Authentication (API key + JWT) and rate limiting
+- [api/services](api/services) — Business logic services
+- [api/tests/primitives](api/tests/primitives) — Primitive contract tests
+- [crates](crates) — Rust crates (engine, simulation, verifier, CLI)
+- [python](python) — Python orchestration and examples
+- [api](api) — REST API service and backend integrations
+- [dashboard](dashboard) — Web dashboard
+- [examples](examples) — Sample scripts and data workflows
+- [docs](docs) — Design and rollout documentation
+- [openspec](openspec) — Specification-driven change management
+- [sdk](sdk) — Official SDKs (planned: Python, JavaScript)
 ---
 
 ## 
@@ -204,7 +212,89 @@ cargo test --workspace
 ```bash
 cd python
 pip install -e .
+```Using API Primitives
+
+### Prerequisites
+- API key from developers.aurelius.ai (coming soon)
+- Or JWT token from authentication flow
+
+### Example: Determinism Scoring
+
+**Python:**
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8000/api/primitives/v1/determinism/score",
+    headers={"X-API-Key": "your_api_key"},
+    json={
+        "strategy_id": "strat-123",
+        "runs": [
+            {
+                "run_id": "run-1",
+                "timestamp": "2026-02-16T10:00:00Z",
+                "total_return": 0.15,
+                "sharpe_ratio": 1.8,
+                "max_drawdown": 0.12,
+                "trade_count": 42,
+                "final_portfolio_value": 115000.0,
+                "execution_time_ms": 1250
+            },
+            {
+                "run_id": "run-2",
+                "timestamp": "2026-02-16T10:05:00Z",
+                "total_return": 0.15,
+                "sharpe_ratio": 1.8,
+                "max_drawdown": 0.12,
+                "trade_count": 42,
+                "final_portfolio_value": 115000.0,
+                "execution_time_ms": 1230
+            }
+        ],
+        "threshold": 95.0
+    }
+)
+
+result = response.json()
+print(f"Score: {result['data']['score']}")
+print(f"Passed: {result['data']['passed']}")
+print(f"Issues: {result['data']['issues']}")
 ```
+
+**cURL:**
+```bash
+curl -X POST http://localhost:8000/api/primitives/v1/determinism/score \
+  -H "X-API-Key: your_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "strategy_id": "strat-123",
+    "runs": [...],
+    "threshold": 95.0
+  }'
+```
+
+### Feature Flags
+
+Primitives are disabled by default. Enable via environment variables:
+
+```bash
+export ENABLE_PRIMITIVE_DETERMINISM=true
+export ENABLE_PRIMITIVE_GATES=true
+export ENABLE_PRIMITIVE_RISK=true
+```
+
+### Rate Limits
+- API Key: 1000 requests/hour
+- JWT Token: 5000 requests/hour
+
+Rate limit headers included in responses:
+- `X-RateLimit-Limit`
+- `X-RateLimit-Remaining`
+- `X-RateLimit-Reset`
+
+---
+
+## 
 
 ### 3) Run API (local)
 
