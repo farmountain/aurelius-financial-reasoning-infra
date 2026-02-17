@@ -1,22 +1,27 @@
-# AURELIUS Quant Reasoning Model Trading Platform
+# AURELIUS Financial Reasoning Infrastructure
 
-AURELIUS is a quantitative research and strategy-evaluation platform that combines:
-- A deterministic Rust backtesting engine
-- A Python orchestration layer for strategy lifecycle and validation
-- A REST API and React dashboard for team workflows
-- Reproducibility tooling for auditability and governance
+AURELIUS is a composable financial reasoning infrastructure that provides API-first primitives for quantitative verification and validation. Like Stripe for payments, AURELIUS offers standalone building blocks that fintech teams can integrate into their own workflows.
 
-It is designed for researchers, engineers, and decision makers who need transparent, testable, and production-oriented quant workflows.
+**Core Infrastructure:**
+- **API Primitives**: Standalone verification services (determinism scoring, risk validation, policy checking, gate verification)
+- **Official SDKs**: Python and JavaScript client libraries with type safety and async support
+- **Developer Portal**: Interactive documentation at developers.aurelius.ai
+- **Deterministic Engine**: Rust backtesting engine for reproducible simulations
+- **Orchestration Layer**: Python workflows for strategy lifecycle and validation
+
+It is designed for fintech builders who need composable verification primitives rather than monolithic platform solutions.
 
 ---
 
 ## Table of Contents
 
 - [Why AURELIUS](#why-aurelius)
+- [API Primitives](#api-primitives)
 - [Core Capabilities](#core-capabilities)
 - [Architecture](#architecture)
 - [Repository Layout](#repository-layout)
 - [Quick Start](#quick-start)
+- [Using API Primitives](#using-api-primitives)
 - [Backtesting with Alpaca Data](#backtesting-with-alpaca-data)
 - [API and Dashboard](#api-and-dashboard)
 - [Validation and Governance](#validation-and-governance)
@@ -30,14 +35,86 @@ It is designed for researchers, engineers, and decision makers who need transpar
 
 ## Why AURELIUS
 
-Most strategy pipelines fail because they are hard to reproduce, difficult to validate out-of-sample, and disconnected from operational controls.
+Most fintech teams build verification and validation logic from scratch, reinventing the wheel for determinism checks, risk validation, and gate verification. AURELIUS provides these capabilities as composable API primitives.
 
-AURELIUS addresses that with:
-- Deterministic simulation primitives
-- Structured strategy generation and evaluation
-- Walk-forward validation and gate-based quality checks
-- API-first workflows for integration into internal tooling
+**Infrastructure Approach:**
+- **Composable**: Use only the primitives you need, integrate into your existing workflows
+- **API-First**: RESTful endpoints with OpenAPI specs, not dashboard-locked
+- **SDK-Native**: Official Python and JavaScript libraries with type safety
+- **Developer-Focused**: Interactive docs, code examples, certification registry
+- **Standards-Based**: Canonical response envelopes, webhook delivery, rate limiting
 
+Think Stripe for payments, but for financial reasoning verification.
+API Primitives
+
+AURELIUS exposes 8 core verification primitives as standalone API endpoints:
+
+### 1) Determinism Scoring (`/api/primitives/v1/determinism/score`)
+Score backtest result consistency across multiple runs. Detects non-deterministic behavior through variance analysis.
+
+**Example:**
+```python
+import requests
+
+response = requests.post(
+    "https://api.aurelius.ai/api/primitives/v1/determinism/score",
+    headers={"X-API-Key": "your_api_key"},
+    json={
+        "strategy_id": "strat-123",
+        "runs": [
+            {"run_id": "run-1", "total_return": 0.15, "sharpe_ratio": 1.8, ...},
+            {"run_id": "run-2", "total_return": 0.15, "sharpe_ratio": 1.8, ...}
+        ],
+        "threshold": 95.0
+    }
+)
+print(f"Determinism score: {response.json()['data']['score']}")
+```
+
+### 2) Gate Verification (Coming Soon)
+Production promotion readiness with configurable gate definitions and certification registry.
+
+### 3) Risk Validation (Coming Soon)
+Portfolio metrics verification (Sharpe, Sortino, drawdown, VaR) against configurable thresholds.
+
+### 4) Policy Checking (Coming Soon)
+Regulatory and business rule compliance validation.
+
+### 5) Strategy Verification (Coming Soon)
+SignPrimitive API Layer (Infrastructure)
+- **API Primitives** (`api/primitives/v1/`): Standalone verification endpoints
+  - Determinism scoring, risk validation, policy checking, gate verification
+  - OpenAPI specification generation for SDK autogeneration
+  - Canonical response envelope (data/meta/links)
+- **Authentication** (`api/security/`): Dual auth (API key + JWT) with rate limiting
+- **Monitoring** (`api/primitives/monitoring.py`): Latency tracking (p50/p95/p99)
+- **Feature Flags** (`api/primitives/feature_flags.py`): Per-primitive rollout control
+
+### Rust Workspace (Core Engine)
+- `schema`: Core traits and canonical data structures
+- `engine`: Deterministic backtest engine and portfolio accounting
+- `broker_sim`: Simulated order execution
+- `cost`: Commission/slippage cost models
+- `cli`: Command-line workflows and sample strategies
+- `crv_verifier`: Verification and policy rule engine
+- `hipcortex`: Content-addressed artifact and reproducibility support
+
+### Python Layer
+- Orchestration workflows
+- Walk-forward validation tooling
+- Strategy generation helpers
+- Task/gate automation
+
+### Service Layer
+- FastAPI-based backend in [api/README.md](api/README.md)
+- React/Vite dashboard in [dashboard/README.md](dashboard/README.md)
+- Developer portal (planned): developers.aurelius.ai
+**OpenAPI Specification:**
+`GET /api/primitives/v1/openapi/primitives/v1.json`
+
+---
+
+## 
 ---
 
 ## Core Capabilities
