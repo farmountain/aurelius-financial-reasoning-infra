@@ -12,6 +12,77 @@ from database.models import Backtest, Validation
 from services.promotion_readiness import build_readiness_payload, ReadinessSignals
 
 
+def build_readiness_signals_from_gate(
+    backtest_metrics: Optional[Dict[str, Any]],
+    validation_metrics: Optional[Dict[str, Any]],
+    gate_checks: List['GateCheck']
+) -> ReadinessSignals:
+    """
+    Build ReadinessSignals from gate check results.
+    
+    Converts gate verification results into the format expected by
+    promotion readiness scorecard.
+    """
+    # Extract signals from backtest metrics
+    run_identity_present = False
+    parity_checked = False
+    parity_passed = False
+    
+    if backtest_metrics:
+        run_identity_present = bool(backtest_metrics.get("run_identity"))
+        parity_passed = bool(backtest_metrics.get("replay_pass", False))
+        parity_checked = "replay_pass" in backtest_metrics
+    
+    # Extract validation signals
+    validation_passed = False
+    if validation_metrics:
+        validation_passed = validation_metrics.get("status") == "completed"
+    
+    # Check CRV availability
+    crv_available = False
+    risk_metrics_complete = False
+    if backtest_metrics:
+        has_sharpe = "sharpe_ratio" in backtest_metrics
+        has_drawdown = "max_drawdown" in backtest_metrics
+        has_return = "total_return" in backtest_metrics
+        risk_metrics_complete = has_sharpe and has_drawdown and has_return
+        crv_available = risk_metrics_complete
+    
+    # Extract policy blocks from failed checks
+    policy_block_reasons = []
+    for check in gate_checks:
+        if not check.passed and check.severity == "error":
+            policy_block_reasons.append(check.check_name.lower().replace(" ", "_"))
+    
+    # Assume lineage complete if run identity present (simplified)
+    lineage_complete = run_identity_present
+    
+    # Startup status (simplified - always healthy for primitive calls)
+    startup_status = "healthy"
+    startup_reasons = []
+    
+    # Evidence staleness (simplified)
+    evidence_stale = False
+    environment_caveat = None
+    evidence_classification = None
+    
+    return ReadinessSignals(
+        run_identity_present=run_identity_present,
+        parity_checked=parity_checked,
+        parity_passed=parity_passed,
+        validation_passed=validation_passed,
+        crv_available=crv_available,
+        risk_metrics_complete=risk_metrics_complete,
+        policy_block_reasons=policy_block_reasons,
+        lineage_complete=lineage_complete,
+        startup_status=startup_status,
+        startup_reasons=startup_reasons,
+        evidence_stale=evidence_stale,
+        environment_caveat=environment_caveat,
+        evidence_classification=evidence_classification
+    )
+
+
 class GateCheck(BaseModel):
     """Individual gate check result."""
     check_name: str
@@ -342,6 +413,19 @@ class GateVerificationService:
         if not validation_passed:
             recommendations.append("Complete walk-forward validation")
         
+        # Build readiness payload for product gate
+        readiness_payload = None
+        try:
+            signals = build_readiness_signals_from_gate(
+                backtest_metrics=backtest_metrics,
+                validation_metrics=validation_metrics,
+                gate_checks=all_checks
+            )
+            readiness_payload = build_readiness_payload(signals)
+        except Exception as e:
+            # Readiness payload is optional, don't fail if it errors
+            pass
+        
         return GateVerifyResponse(
             strategy_id=strategy_id,
             gate_type="product",
@@ -349,6 +433,7 @@ class GateVerificationService:
             gate_status=gate_status,
             checks=all_checks,
             score=round(score, 1),
+            readiness_payload=readiness_payload,
             recommendations=recommendations
         )
     

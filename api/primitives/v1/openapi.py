@@ -189,6 +189,121 @@ def generate_primitives_openapi_spec() -> Dict[str, Any]:
                         }
                     }
                 }
+            },
+            "/api/primitives/v1/gates/verify": {
+                "post": {
+                    "tags": ["gates"],
+                    "summary": "Verify strategy against gate requirements",
+                    "description": "Performs gate verification checks (dev, CRV, or product) to determine promotion readiness.",
+                    "operationId": "verify_gate",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"BearerAuth": []}
+                    ],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/GateVerifyRequest"},
+                                "example": {
+                                    "strategy_id": "strat-123",
+                                    "gate_type": "dev",
+                                    "backtest_metrics": {
+                                        "run_identity": "run-abc",
+                                        "sharpe_ratio": 1.8,
+                                        "max_drawdown": 0.12,
+                                        "total_return": 0.15,
+                                        "replay_pass": True
+                                    },
+                                    "thresholds": {
+                                        "min_sharpe": 1.0,
+                                        "max_drawdown": 0.20,
+                                        "min_return": 0.10
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Gate verification completed",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/CanonicalEnvelope"},
+                                    "example": {
+                                        "data": {
+                                            "strategy_id": "strat-123",
+                                            "gate_type": "dev",
+                                            "passed": True,
+                                            "gate_status": "passed",
+                                            "checks": [
+                                                {
+                                                    "check_name": "Strategy Exists",
+                                                    "passed": True,
+                                                    "description": "Strategy artifact must exist",
+                                                    "message": "strategy_id=strat-123",
+                                                    "severity": "error"
+                                                }
+                                            ],
+                                            "score": 100.0,
+                                            "recommendations": []
+                                        },
+                                        "meta": {
+                                            "version": "v1",
+                                            "timestamp": "2026-02-17T15:00:00Z",
+                                            "request_id": "req-gate-123"
+                                        },
+                                        "links": {
+                                            "self": "/api/primitives/v1/gates/verify",
+                                            "docs": "/api/primitives/openapi/v1.json"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid gate type or missing required fields",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                                }
+                            }
+                        },
+                        "401": {"$ref": "#/components/responses/Unauthorized"},
+                        "429": {"$ref": "#/components/responses/RateLimitExceeded"},
+                        "503": {
+                            "description": "Gates primitive disabled via feature flag",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/primitives/v1/gates/health": {
+                "get": {
+                    "tags": ["gates"],
+                    "summary": "Check gates primitive health",
+                    "description": "Health check endpoint for monitoring",
+                    "operationId": "gates_health",
+                    "responses": {
+                        "200": {
+                            "description": "Primitive is healthy",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {"type": "string", "example": "ok"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "components": {
@@ -310,6 +425,106 @@ def generate_primitives_openapi_spec() -> Dict[str, Any]:
                         }
                     },
                     "required": ["score", "passed", "confidence_interval", "p_value", "variance_metrics", "issues"]
+                },
+                "GateCheck": {
+                    "type": "object",
+                    "description": "Individual gate check result",
+                    "properties": {
+                        "check_name": {"type": "string", "example": "Strategy Exists"},
+                        "passed": {"type": "boolean", "example": true},
+                        "description": {"type": "string", "example": "Strategy artifact must exist"},
+                        "message": {"type": "string", "example": "strategy_id=strat-123"},
+                        "severity": {"type": "string", "enum": ["error", "warning", "info"], "default": "error"}
+                    },
+                    "required": ["check_name", "passed", "description"]
+                },
+                "GateVerifyRequest": {
+                    "type": "object",
+                    "description": "Request for gate verification",
+                    "properties": {
+                        "strategy_id": {"type": "string", "example": "strat-123"},
+                        "gate_type": {
+                            "type": "string",
+                            "enum": ["dev", "crv", "product"],
+                            "example": "dev",
+                            "description": "Type of gate to verify"
+                        },
+                        "backtest_metrics": {
+                            "type": "object",
+                            "description": "Backtest metrics for verification",
+                            "example": {
+                                "run_identity": "run-abc",
+                                "sharpe_ratio": 1.8,
+                                "max_drawdown": 0.12,
+                                "total_return": 0.15,
+                                "replay_pass": true
+                            }
+                        },
+                        "validation_metrics": {
+                            "type": "object",
+                            "description": "Validation metrics (for product gate)"
+                        },
+                        "thresholds": {
+                            "type": "object",
+                            "description": "Custom thresholds",
+                            "properties": {
+                                "min_sharpe": {"type": "number", "example": 1.0},
+                                "max_drawdown": {"type": "number", "example": 0.20},
+                                "min_return": {"type": "number", "example": 0.10}
+                            }
+                        }
+                    },
+                    "required": ["strategy_id", "gate_type"]
+                },
+                "GateVerifyResponse": {
+                    "type": "object",
+                    "description": "Gate verification result",
+                    "properties": {
+                        "strategy_id": {"type": "string", "example": "strat-123"},
+                        "gate_type": {"type": "string", "example": "dev"},
+                        "passed": {"type": "boolean", "example": true},
+                        "gate_status": {
+                            "type": "string",
+                            "enum": ["passed", "failed", "blocked"],
+                            "example": "passed"
+                        },
+                        "checks": {
+                            "type": "array",
+                            "items": {"$ref": "#/components/schemas/GateCheck"}
+                        },
+                        "score": {"type": "number", "format": "float", "example": 100.0, "description": "Overall gate score (0-100)"},
+                        "readiness_payload": {"type": "object", "description": "Promotion readiness data"},
+                        "recommendations": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "example": [],
+                            "description": "Improvement recommendations"
+                        }
+                    },
+                    "required": ["strategy_id", "gate_type", "passed", "gate_status", "checks"]
+                },
+                "CustomGateDefinition": {
+                    "type": "object",
+                    "description": "Custom gate definition for user-defined checks",
+                    "properties": {
+                        "gate_id": {"type": "string", "example": "custom-liquidity-gate"},
+                        "name": {"type": "string", "example": "Liquidity Gate"},
+                        "description": {"type": "string", "example": "Ensures strategy trades liquid assets"},
+                        "checks": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "check_name": {"type": "string"},
+                                    "condition": {"type": "string", "description": "JSONPath expression"},
+                                    "threshold": {"type": "number"},
+                                    "operator": {"type": "string", "enum": [">=", "<=", "==", "!=", ">", "<"]}
+                                }
+                            }
+                        },
+                        "enabled": {"type": "boolean", "default": true}
+                    },
+                    "required": ["gate_id", "name", "checks"]
                 }
             },
             "securitySchemes": {

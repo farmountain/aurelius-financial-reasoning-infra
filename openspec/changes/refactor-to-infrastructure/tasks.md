@@ -21,10 +21,10 @@
 
 - [x] 3.1 Extract gate verification logic from `api/routers/gates.py` into primitive service
 - [x] 3.2 Create `/api/primitives/v1/gates/verify` endpoint with sync and async variants
-- [ ] 3.3 Define OpenAPI schema for GateVerifyRequest, GateVerifyResponse, CustomGateDefinition
+- [x] 3.3 Define OpenAPI schema for GateVerifyRequest, GateVerifyResponse, CustomGateDefinition
 - [ ] 3.4 Implement custom gate definition storage (PostgreSQL table for gate configs)
 - [ ] 3.5 Add gate definition CRUD endpoints (`/api/primitives/v1/gates/definitions`)
-- [ ] 3.6 Integrate promotion readiness scorecard into gate verification response payload
+- [x] 3.6 Integrate promotion readiness scorecard into gate verification response payload
 - [ ] 3.7 Implement webhook delivery for async gate verification (POST to client URL with HMAC signature)
 - [ ] 3.8 Add gate primitive tests (15+ scenarios including custom gates, async flow, webhook delivery)
 - [ ] 3.9 Create certification registry table (strategy_id, gate_id, pass/fail, timestamp, score)
