@@ -19,8 +19,8 @@
 
 ## 3. Gate Verification Primitive Extraction
 
-- [ ] 3.1 Extract gate verification logic from `api/routers/gates.py` into primitive service
-- [ ] 3.2 Create `/api/primitives/v1/gates/verify` endpoint with sync and async variants
+- [x] 3.1 Extract gate verification logic from `api/routers/gates.py` into primitive service
+- [x] 3.2 Create `/api/primitives/v1/gates/verify` endpoint with sync and async variants
 - [ ] 3.3 Define OpenAPI schema for GateVerifyRequest, GateVerifyResponse, CustomGateDefinition
 - [ ] 3.4 Implement custom gate definition storage (PostgreSQL table for gate configs)
 - [ ] 3.5 Add gate definition CRUD endpoints (`/api/primitives/v1/gates/definitions`)
