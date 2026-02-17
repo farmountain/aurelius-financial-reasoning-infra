@@ -53,7 +53,144 @@ def generate_primitives_openapi_spec() -> Dict[str, Any]:
                 "description": "Local development"
             }
         ],
-        "paths": {},
+        "paths": {
+            "/api/primitives/v1/determinism/score": {
+                "post": {
+                    "tags": ["determinism"],
+                    "summary": "Score determinism of backtest results",
+                    "description": "Analyzes variance in key metrics across multiple backtest runs to detect non-deterministic behavior. "
+                                   "A score of 100 indicates perfect determinism. Scores below 95 typically indicate bugs or data issues.",
+                    "operationId": "score_determinism",
+                    "security": [
+                        {"ApiKeyAuth": []},
+                        {"BearerAuth": []}
+                    ],
+                    "requestBody": {
+                        "required": True,
+                        "content": {
+                            "application/json": {
+                                "schema": {"$ref": "#/components/schemas/DeterminismScoreRequest"},
+                                "example": {
+                                    "strategy_id": "strat-123",
+                                    "runs": [
+                                        {
+                                            "run_id": "run-1",
+                                            "timestamp": "2026-02-16T10:00:00Z",
+                                            "total_return": 0.15,
+                                            "sharpe_ratio": 1.8,
+                                            "max_drawdown": 0.12,
+                                            "trade_count": 42,
+                                            "final_portfolio_value": 115000.0,
+                                            "execution_time_ms": 1250
+                                        },
+                                        {
+                                            "run_id": "run-2",
+                                            "timestamp": "2026-02-16T10:05:00Z",
+                                            "total_return": 0.15,
+                                            "sharpe_ratio": 1.8,
+                                            "max_drawdown": 0.12,
+                                            "trade_count": 42,
+                                            "final_portfolio_value": 115000.0,
+                                            "execution_time_ms": 1230
+                                        }
+                                    ],
+                                    "threshold": 95.0
+                                }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Determinism scoring completed successfully",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/CanonicalEnvelope"},
+                                    "example": {
+                                        "data": {
+                                            "score": 98.5,
+                                            "passed": True,
+                                            "confidence_interval": 0.95,
+                                            "p_value": 0.001,
+                                            "variance_metrics": {
+                                                "total_return": 0.0,
+                                                "sharpe_ratio": 0.0,
+                                                "max_drawdown": 0.0,
+                                                "trade_count": 0.0
+                                            },
+                                            "issues": []
+                                        },
+                                        "meta": {
+                                            "version": "v1",
+                                            "timestamp": "2026-02-17T14:30:00Z",
+                                            "request_id": "req-abc123"
+                                        },
+                                        "links": {
+                                            "self": "/api/primitives/v1/determinism/score",
+                                            "docs": "/api/primitives/openapi/v1.json"
+                                        }
+                                    }
+                                }
+                            },
+                            "headers": {
+                                "X-RateLimit-Limit": {
+                                    "schema": {"type": "integer"},
+                                    "description": "Request limit per hour"
+                                },
+                                "X-RateLimit-Remaining": {
+                                    "schema": {"type": "integer"},
+                                    "description": "Remaining requests in window"
+                                },
+                                "X-RateLimit-Reset": {
+                                    "schema": {"type": "integer"},
+                                    "description": "Unix timestamp when limit resets"
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid request (fewer than 2 runs, invalid threshold)",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                                }
+                            }
+                        },
+                        "401": {"$ref": "#/components/responses/Unauthorized"},
+                        "429": {"$ref": "#/components/responses/RateLimitExceeded"},
+                        "503": {
+                            "description": "Primitive disabled via feature flag",
+                            "content": {
+                                "application/json": {
+                                    "schema": {"$ref": "#/components/schemas/ErrorResponse"}
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/primitives/v1/determinism/health": {
+                "get": {
+                    "tags": ["determinism"],
+                    "summary": "Check determinism primitive health",
+                    "description": "Health check endpoint for monitoring",
+                    "operationId": "determinism_health",
+                    "responses": {
+                        "200": {
+                            "description": "Primitive is healthy",
+                            "content": {
+                                "application/json": {
+                                    "schema": {
+                                        "type": "object",
+                                        "properties": {
+                                            "status": {"type": "string", "example": "ok"}
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "components": {
             "schemas": {
                 "CanonicalEnvelope": {
@@ -101,6 +238,78 @@ def generate_primitives_openapi_spec() -> Dict[str, Any]:
                         }
                     },
                     "required": ["error", "meta"]
+                },
+                "BacktestRun": {
+                    "type": "object",
+                    "description": "Single backtest run result",
+                    "properties": {
+                        "run_id": {"type": "string", "example": "run-1"},
+                        "timestamp": {"type": "string", "format": "date-time", "example": "2026-02-16T10:00:00Z"},
+                        "total_return": {"type": "number", "format": "float", "example": 0.15},
+                        "sharpe_ratio": {"type": "number", "format": "float", "example": 1.8},
+                        "max_drawdown": {"type": "number", "format": "float", "example": 0.12},
+                        "trade_count": {"type": "integer", "example": 42},
+                        "final_portfolio_value": {"type": "number", "format": "float", "example": 115000.0},
+                        "execution_time_ms": {"type": "number", "format": "float", "example": 1250}
+                    },
+                    "required": ["run_id", "timestamp", "total_return", "sharpe_ratio", "max_drawdown", "trade_count", "final_portfolio_value", "execution_time_ms"]
+                },
+                "DeterminismScoreRequest": {
+                    "type": "object",
+                    "description": "Request for determinism scoring of backtest results",
+                    "properties": {
+                        "strategy_id": {"type": "string", "example": "strat-123"},
+                        "runs": {
+                            "type": "array",
+                            "items": {"$ref": "#/components/schemas/BacktestRun"},
+                            "minItems": 2,
+                            "description": "At least 2 runs required for comparison"
+                        },
+                        "threshold": {
+                            "type": "number",
+                            "format": "float",
+                            "default": 95.0,
+                            "minimum": 0,
+                            "maximum": 100,
+                            "example": 95.0,
+                            "description": "Minimum score to pass (0-100)"
+                        }
+                    },
+                    "required": ["strategy_id", "runs"]
+                },
+                "DeterminismScoreResponse": {
+                    "type": "object",
+                    "description": "Determinism scoring result",
+                    "properties": {
+                        "score": {
+                            "type": "number",
+                            "format": "float",
+                            "minimum": 0,
+                            "maximum": 100,
+                            "example": 98.5,
+                            "description": "Determinism score (0-100, 100=perfect)"
+                        },
+                        "passed": {"type": "boolean", "example": true, "description": "Whether score meets threshold"},
+                        "confidence_interval": {"type": "number", "format": "float", "example": 0.95, "description": "Statistical confidence (0-1)"},
+                        "p_value": {"type": "number", "format": "float", "example": 0.001, "description": "Statistical significance"},
+                        "variance_metrics": {
+                            "type": "object",
+                            "description": "Variance across runs for each metric",
+                            "properties": {
+                                "total_return": {"type": "number", "format": "float", "example": 0.0},
+                                "sharpe_ratio": {"type": "number", "format": "float", "example": 0.0},
+                                "max_drawdown": {"type": "number", "format": "float", "example": 0.0},
+                                "trade_count": {"type": "number", "format": "float", "example": 0.0}
+                            }
+                        },
+                        "issues": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "example": [],
+                            "description": "Detected non-deterministic behaviors"
+                        }
+                    },
+                    "required": ["score", "passed", "confidence_interval", "p_value", "variance_metrics", "issues"]
                 }
             },
             "securitySchemes": {

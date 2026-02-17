@@ -10,12 +10,12 @@
 - [x] 1.8 Create primitive API test harness in `api/tests/primitives/` with contract test framework
 - [x] 2.1 Extract determinism scoring logic from `api/services/determinism.py` into standalone primitive service
 - [x] 2.2 Create `/api/primitives/v1/determinism/score` endpoint with POST handler
-- [ ] 2.3 Define OpenAPI schema for DeterminismScoreRequest and DeterminismScoreResponse with examples
-- [ ] 2.4 Implement request validation with Pydantic models (backtest results, thresholds, confidence intervals)
-- [ ] 2.5 Add determinism primitive unit tests (10+ scenarios covering edge cases)
-- [ ] 2.6 Add determinism primitive integration tests against live API endpoint
-- [ ] 2.7 Document determinism API in Markdown with code examples (Python, cURL)
-- [ ] 2.8 Refactor legacy workflow endpoint to call new determinism primitive internally
+- [x] 2.3 Define OpenAPI schema for DeterminismScoreRequest and DeterminismScoreResponse with examples
+- [x] 2.4 Implement request validation with Pydantic models (backtest results, thresholds, confidence intervals)
+- [x] 2.5 Add determinism primitive unit tests (10+ scenarios covering edge cases)
+- [x] 2.6 Add determinism primitive integration tests against live API endpoint
+- [x] 2.7 Document determinism API in Markdown with code examples (Python, cURL)
+- [x] 2.8 Refactor legacy workflow endpoint to call new determinism primitive internally
 
 ## 3. Gate Verification Primitive Extraction
 

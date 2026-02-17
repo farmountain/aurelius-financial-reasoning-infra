@@ -24,6 +24,7 @@ from database.models import Backtest, Validation, GateResult
 from services.governance import check_lineage_completeness, build_governance_report
 from services.release_gates import evaluate_release_gate
 from services.promotion_readiness import ReadinessSignals, build_readiness_payload, parse_acceptance_evidence_metadata
+from services.determinism_scoring import DeterminismScoringService, DeterminismScoreRequest, BacktestRun
 from config import settings
 from security.dependencies import get_current_user
 from security.auth import TokenData
@@ -109,6 +110,55 @@ def _parity_block_reasons(backtest: Backtest | None) -> list[str]:
     return reasons
 
 
+def _check_determinism_with_primitive(strategy_id: str, backtest_runs: list[dict]) -> tuple[bool, str]:
+    """
+    Check determinism using the new determinism primitive.
+    
+    Args:
+        strategy_id: Strategy identifier
+        backtest_runs: List of backtest run dictionaries with metrics
+        
+    Returns:
+        Tuple of (passed: bool, message: str)
+    """
+    if not backtest_runs or len(backtest_runs) < 2:
+        return False, "Insufficient runs for determinism check (need 2+)"
+    
+    try:
+        # Convert backtest runs to BacktestRun objects
+        runs = []
+        for run_data in backtest_runs:
+            runs.append(BacktestRun(
+                run_id=run_data.get("run_id", "unknown"),
+                timestamp=run_data.get("timestamp", datetime.utcnow()),
+                total_return=run_data.get("total_return", 0.0),
+                sharpe_ratio=run_data.get("sharpe_ratio", 0.0),
+                max_drawdown=run_data.get("max_drawdown", 0.0),
+                trade_count=run_data.get("trade_count", 0),
+                final_portfolio_value=run_data.get("final_portfolio_value", 0.0),
+                execution_time_ms=run_data.get("execution_time_ms", 0.0)
+            ))
+        
+        # Call determinism scoring service
+        request = DeterminismScoreRequest(
+            strategy_id=strategy_id,
+            runs=runs,
+            threshold=95.0  # Use 95% threshold for gate checks
+        )
+        
+        result = DeterminismScoringService.score_determinism(request)
+        
+        if result.passed:
+            return True, f"Determinism score: {result.score:.1f}%"
+        else:
+            issues_str = "; ".join(result.issues) if result.issues else "variance detected"
+            return False, f"Determinism score: {result.score:.1f}% - {issues_str}"
+            
+    except Exception as e:
+        # Fallback to legacy behavior if primitive fails
+        return False, f"Determinism check error: {str(e)}"
+
+
 @router.post("/dev-gate", response_model=DevGateResult)
 async def run_dev_gate(
     request: GateCheckRequest,
@@ -121,7 +171,22 @@ async def run_dev_gate(
     backtest = _resolve_backtest(request, db)
     metrics = backtest.metrics if backtest and isinstance(backtest.metrics, dict) else {}
     run_identity = metrics.get("run_identity") if isinstance(metrics, dict) else None
-    replay_pass = bool(metrics.get("replay_pass", False)) if isinstance(metrics, dict) else False
+    
+    # Try to use new determinism primitive if backtest runs are available
+    replay_pass = False
+    replay_message = "Replay parity failed or missing"
+    
+    if isinstance(metrics, dict) and "backtest_runs" in metrics:
+        # Use new determinism primitive
+        backtest_runs = metrics.get("backtest_runs", [])
+        replay_pass, replay_message = _check_determinism_with_primitive(
+            request.strategy_id,
+            backtest_runs
+        )
+    else:
+        # Fallback to legacy parity check
+        replay_pass = bool(metrics.get("replay_pass", False)) if isinstance(metrics, dict) else False
+        replay_message = "Replay parity passed" if replay_pass else "Replay parity failed or missing"
 
     checks = [
         DevGateCheck(
@@ -146,7 +211,7 @@ async def run_dev_gate(
             check_name="Replay Determinism",
             passed=replay_pass,
             description="Strategy produces consistent results",
-            message="Replay parity passed" if replay_pass else "Replay parity failed or missing",
+            message=replay_message,
         ),
     ]
 
